@@ -79,7 +79,21 @@ bun run lint          # ESLint
 bun run format        # Prettier
 bun run format:check  # Prettier check
 bun run check:rust    # rustfmt, clippy, and cargo test
+bun run check         # frontend checks plus Rust checks
+bun run hooks:install # enable Git hooks for this clone
 ```
+
+`bun install` also runs `prepare`, which points Git at [`.githooks/`](.githooks/). The pre-commit hook formats/lints staged frontend files and, when Rust files are staged, runs `rustfmt` and Clippy. Skip it with `git commit --no-verify` or `GIT_FOREST_SKIP_HOOKS=1`.
+
+## CI
+
+GitHub Actions runs on pull requests, pushes to `main`, and manual dispatch:
+
+- Frontend: Prettier, ESLint, TypeScript, Vitest, Vite build
+- Rust: rustfmt, Clippy, `cargo test`
+- Desktop: production Tauri build after the other jobs pass
+
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 Equivalent Cargo commands from `apps/desktop/src-tauri`:
 
