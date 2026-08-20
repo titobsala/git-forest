@@ -62,8 +62,7 @@ impl ForestService {
             ));
         }
 
-        save_configuration(self.db.connection(), &configuration)?;
-        PlatformPaths::ensure_forest_layout(&configuration.forest_root)?;
+        self.persist_configuration(&configuration)?;
         self.state()
     }
 
@@ -112,21 +111,26 @@ impl ForestService {
         self.state()
     }
 
+    fn persist_configuration(
+        &self,
+        configuration: &ForestConfiguration,
+    ) -> Result<(), ForestError> {
+        PlatformPaths::ensure_forest_layout(&configuration.forest_root)?;
+        save_configuration(self.db.connection(), configuration)
+    }
+
     fn ensure_default_configuration(&self) -> Result<(), ForestError> {
         if load_configuration(self.db.connection())?.is_some() {
             return Ok(());
         }
 
-        save_configuration(
-            self.db.connection(),
-            &ForestConfiguration {
-                forest_root: self.platform.default_forest_root(),
-                default_terminal: TerminalProviderId::Warp,
-                default_agent_id: crate::domain::AgentDefinitionId::from_string("codex"),
-                worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
-                launch_behavior: LaunchBehavior::Auto,
-            },
-        )
+        self.persist_configuration(&ForestConfiguration {
+            forest_root: self.platform.default_forest_root(),
+            default_terminal: TerminalProviderId::Warp,
+            default_agent_id: crate::domain::AgentDefinitionId::from_string("codex"),
+            worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
+            launch_behavior: LaunchBehavior::Auto,
+        })
     }
 }
 
@@ -219,6 +223,38 @@ mod tests {
             WorktreeNamingStrategy::BranchAsIs
         );
         assert!(next_root.join("repos").is_dir());
+    }
+
+    #[test]
+    fn rejected_forest_root_is_not_persisted() {
+        let env = TempEnv::new();
+        let service = open_service(&env);
+        let original_root = service.configuration().expect("config").forest_root;
+        let blocker = env.root.join("not-a-directory");
+        std::fs::write(&blocker, b"not a directory").expect("write blocker");
+
+        let error = service
+            .update_configuration(ForestConfiguration {
+                forest_root: blocker.join("forest"),
+                default_terminal: TerminalProviderId::Warp,
+                default_agent_id: crate::domain::AgentDefinitionId::from_string("codex"),
+                worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
+                launch_behavior: LaunchBehavior::Auto,
+            })
+            .expect_err("unusable root");
+
+        assert!(matches!(error, ForestError::Io(_)));
+        assert_eq!(
+            service.configuration().expect("config").forest_root,
+            original_root
+        );
+
+        drop(service);
+        let reopened = open_service(&env);
+        assert_eq!(
+            reopened.configuration().expect("reopen").forest_root,
+            original_root
+        );
     }
 
     #[test]
