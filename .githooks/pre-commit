@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${GIT_FOREST_SKIP_HOOKS:-}" == "1" ]]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ ${#staged[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+prettier_files=()
+frontend_changed=0
+rust_changed=0
+
+for file in "${staged[@]}"; do
+  case "$file" in
+    *.ts | *.tsx | *.js | *.json | *.md | *.yml | *.yaml | *.css | *.html)
+      prettier_files+=("$file")
+      ;;
+  esac
+
+  case "$file" in
+    apps/desktop/src/* | apps/desktop/package.json | apps/desktop/tsconfig*.json | apps/desktop/vite.config.ts | apps/desktop/eslint.config.js)
+      frontend_changed=1
+      ;;
+    *.rs | apps/desktop/src-tauri/Cargo.toml | apps/desktop/src-tauri/Cargo.lock | rustfmt.toml)
+      rust_changed=1
+      ;;
+  esac
+done
+
+if [[ ${#prettier_files[@]} -gt 0 ]]; then
+  bunx prettier --check --ignore-unknown "${prettier_files[@]}"
+fi
+
+if [[ "$frontend_changed" == "1" ]]; then
+  bun run lint
+  bun run typecheck
+  bun run test
+fi
+
+if [[ "$rust_changed" == "1" ]]; then
+  cargo fmt --all --check --manifest-path apps/desktop/src-tauri/Cargo.toml
+  cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+fi

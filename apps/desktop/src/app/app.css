@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light;
+  font-family:
+    "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+  --bg: #ffffff;
+  --bg-muted: #f4f4f5;
+  --fg: #18181b;
+  --fg-muted: #52525b;
+  --border: #d4d4d8;
+  --accent: #18181b;
+  --accent-fg: #ffffff;
+  --danger-bg: #fafafa;
+  --danger-border: #a1a1aa;
+  --danger-fg: #18181b;
+  --focus: #18181b;
+  color: var(--fg);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #09090b;
+    --bg-muted: #18181b;
+    --fg: #fafafa;
+    --fg-muted: #a1a1aa;
+    --border: #3f3f46;
+    --accent: #fafafa;
+    --accent-fg: #09090b;
+    --danger-bg: #18181b;
+    --danger-border: #52525b;
+    --danger-fg: #fafafa;
+    --focus: #fafafa;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.milestone {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.75rem 2rem 2.5rem;
+  background: var(--bg);
+}
+
+.milestone-header h1,
+.milestone h1 {
+  margin: 0;
+  font-size: 1.85rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+}
+
+.milestone .version {
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.milestone .tagline {
+  margin: 0.7rem 0 0;
+  max-width: 28rem;
+  font-size: 1.05rem;
+  color: var(--fg-muted);
+}
+
+.banner {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+.panel {
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.panel h2 {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+
+.status-grid div {
+  margin: 0;
+}
+
+.status-grid dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.status-grid dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field span,
+.mode-fieldset legend {
+  font-size: 0.85rem;
+  color: var(--fg);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.mode-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  gap: 1rem;
+}
+
+.mode-fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button {
+  align-self: flex-start;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.hint {
+  margin: 0 0 0.85rem;
+  color: var(--fg-muted);
+}
+
+.repository-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.repository-list li {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) auto 1fr;
+  gap: 0.55rem 0.8rem;
+  align-items: center;
+}
+
+.repository-name {
+  font-weight: 600;
+}
+
+.repository-path {
+  overflow-wrap: anywhere;
+  color: var(--fg-muted);
+}
+
+.mode-badge {
+  justify-self: start;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.mode-managed {
+  color: var(--fg);
+  border-color: var(--fg);
+}

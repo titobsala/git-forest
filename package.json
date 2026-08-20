@@ -1,0 +1,24 @@
+{
+  "name": "git-forest",
+  "private": true,
+  "version": "0.0.2",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/desktop tauri:dev",
+    "build": "bun run --cwd apps/desktop tauri:build",
+    "test": "bun run --cwd apps/desktop test",
+    "typecheck": "bun run --cwd apps/desktop typecheck",
+    "lint": "bun run --cwd apps/desktop lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:rust": "cargo fmt --all --check --manifest-path apps/desktop/src-tauri/Cargo.toml && cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run check:rust",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
+    "prepare": "bash scripts/install-git-hooks.sh"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
+  }
+}
