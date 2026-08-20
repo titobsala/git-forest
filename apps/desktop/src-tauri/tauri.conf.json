@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Git Forest",
+  "version": "0.0.2",
+  "identifier": "dev.gitforest.desktop",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Git Forest",
+        "width": 760,
+        "height": 860,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "withGlobalTauri": true,
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src ipc: http://ipc.localhost https://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
