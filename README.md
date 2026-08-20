@@ -4,11 +4,11 @@ Keyboard-first desktop control plane for Git worktrees and coding-agent sessions
 
 Git Forest is **not** a full Git client, IDE, or terminal. It connects repositories, worktrees, terminals, and CLI coding agents so a developer can move between isolated workspaces quickly.
 
-This repository is at **Release 0.0.2** — a runnable Linux desktop app that can create, persist, and reload Forest configuration plus Linked/Managed repository records. Git discovery, worktrees, terminals, and agents start in later roadmap releases.
+This repository is at **Release 0.0.4** — a runnable Linux desktop app that can index local Git repositories, scan folders, and create, inspect, and safely remove Git worktrees. Terminals and coding agents start in later roadmap releases.
 
 ## Prerequisites
 
-The 0.0.2 desktop app targets **Linux** first.
+The 0.0.4 desktop app targets **Linux** first.
 
 You need:
 
@@ -55,16 +55,44 @@ That opens the Git Forest window:
 ```text
 Git Forest
 
-Version 0.0.2
+Version 0.0.4
 
-Configuration rooted.
+Worktrees in reach.
 ```
 
-The window shows the Forest root, application-data/database location, schema version, editable configuration, and a form to register an existing directory as **Linked** or **Managed**. Restarting the app keeps that state.
+The window shows Forest status and configuration, then lets you:
 
-Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Registering a repository only stores an index record; it does not inspect Git or move files.
+- link an existing Git repository (directory picker or path);
+- scan a folder with live progress and cancellation, then import selected candidates;
+- search indexed repositories by name, path, branch, or remote;
+- refresh Git metadata and remove a repository from the Forest index only;
+- select a repository to list worktrees, create a new-branch worktree, and remove one after a safety preview.
+
+Restarting the app keeps that index. Schema version 2 adds repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`) without dropping 0.0.2 rows.
+
+Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>/<worktree-slug>`. Removing a repository or a clean worktree never deletes Git branches; dirty worktree removal requires an explicit force action.
+
+Limitations in this release:
+
+- new imports are Linked only (existing Managed records still load);
+- worktree creation always makes a new branch from a local base (no attach-existing-branch yet);
+- primary, locked, missing, and Git-unknown worktrees cannot be removed;
+- terminals and agents are not launched yet.
+
+The desktop capability set is `core:default` plus `dialog:allow-open` for native directory pickers. The UI never receives a generic shell command.
 
 JavaScript packages are managed with **Bun only**. Do not add npm, yarn, or pnpm lockfiles.
+
+## Manual smoke
+
+After `bun run dev`:
+
+1. Link a nested path inside an existing Git repository; the indexed path should be the repository root.
+2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.
+3. Search by name, path, branch, or remote; refresh metadata; restart and confirm the index remains.
+4. Remove a repository from Forest and confirm the directory is still on disk.
+5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>/`.
+6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists.
 
 ## Commands
 

@@ -1,6 +1,6 @@
 [package]
 name = "git-forest"
-version = "0.0.2"
+version = "0.0.4"
 description = "Keyboard-first Git worktree and coding-agent control plane"
 authors = ["Git Forest contributors"]
 edition = "2021"
@@ -18,5 +18,6 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }

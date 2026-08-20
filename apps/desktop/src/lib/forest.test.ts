@@ -10,8 +10,8 @@ vi.mock("./tauri", () => ({
 const sampleState: ForestState = {
   appInfo: {
     name: "Git Forest",
-    version: "0.0.2",
-    tagline: "Configuration rooted.",
+    version: "0.0.4",
+    tagline: "Worktrees in reach.",
   },
   configuration: {
     forestRoot: "/tmp/forest",

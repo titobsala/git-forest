@@ -28,6 +28,50 @@ pub enum ForestError {
     UnknownAgent(String),
     #[error("application state lock was poisoned")]
     MutexPoisoned,
+    #[error("git is not installed or is not available on PATH")]
+    GitNotInstalled,
+    #[error("the selected directory is not a git repository")]
+    InvalidRepository,
+    #[error("git command failed: {0}")]
+    GitCommandFailed(String),
+    #[error("git reference was not found: {0}")]
+    MissingRef(String),
+    #[error("repository was not found")]
+    RepositoryNotFound,
+    #[error("worktree was not found")]
+    WorktreeNotFound,
+    #[error("branch already exists: {0}")]
+    BranchAlreadyExists(String),
+    #[error("a worktree already exists at this path or branch")]
+    WorktreeAlreadyExists,
+    #[error("worktree has uncommitted or untracked changes")]
+    DirtyWorktree,
+    #[error("invalid branch name: {0}")]
+    InvalidBranchName(String),
+    #[error("worktree destination is unavailable")]
+    WorktreePathUnavailable,
+    #[error("the primary worktree cannot be removed")]
+    CannotRemovePrimaryWorktree,
+    #[error("worktree is locked")]
+    WorktreeLocked,
+    #[error("worktree directory is missing")]
+    WorktreeMissing,
+    #[error("worktree has an active agent session")]
+    ActiveAgentSession,
+    #[error("a repository scan is already running")]
+    ScanInProgress,
+    #[error("repository scan was not found")]
+    ScanNotFound,
+    #[error("scan root does not exist or is not a directory")]
+    ScanRootNotDirectory,
+    #[error("scan depth is invalid")]
+    InvalidScanDepth,
+    #[error("path is outside the managed forest worktree root")]
+    PathOutsideForest,
+    #[error("worktree directory name is empty or invalid")]
+    EmptySlug,
+    #[error("this worktree can only be removed with explicit force")]
+    ForceRequired,
 }
 
 impl From<rusqlite::Error> for ForestError {
@@ -71,6 +115,28 @@ impl From<ForestError> for CommandError {
             ForestError::ForestRootNotAbsolute => "forest_root_not_absolute",
             ForestError::UnknownAgent(_) => "unknown_agent",
             ForestError::MutexPoisoned => "mutex_poisoned",
+            ForestError::GitNotInstalled => "git_not_installed",
+            ForestError::InvalidRepository => "invalid_repository",
+            ForestError::GitCommandFailed(_) => "git_command_failed",
+            ForestError::MissingRef(_) => "missing_ref",
+            ForestError::RepositoryNotFound => "repository_not_found",
+            ForestError::WorktreeNotFound => "worktree_not_found",
+            ForestError::BranchAlreadyExists(_) => "branch_already_exists",
+            ForestError::WorktreeAlreadyExists => "worktree_already_exists",
+            ForestError::DirtyWorktree => "dirty_worktree",
+            ForestError::InvalidBranchName(_) => "invalid_branch_name",
+            ForestError::WorktreePathUnavailable => "worktree_path_unavailable",
+            ForestError::CannotRemovePrimaryWorktree => "cannot_remove_primary_worktree",
+            ForestError::WorktreeLocked => "worktree_locked",
+            ForestError::WorktreeMissing => "worktree_missing",
+            ForestError::ActiveAgentSession => "active_agent_session",
+            ForestError::ScanInProgress => "scan_in_progress",
+            ForestError::ScanNotFound => "scan_not_found",
+            ForestError::ScanRootNotDirectory => "scan_root_not_directory",
+            ForestError::InvalidScanDepth => "invalid_scan_depth",
+            ForestError::PathOutsideForest => "path_outside_forest",
+            ForestError::EmptySlug => "empty_slug",
+            ForestError::ForceRequired => "force_required",
         };
 
         Self {
@@ -91,6 +157,22 @@ mod tests {
         assert_eq!(
             error.message,
             "a repository is already registered at this path"
+        );
+    }
+
+    #[test]
+    fn maps_git_failures_to_stable_command_codes() {
+        assert_eq!(
+            CommandError::from(ForestError::GitNotInstalled).code,
+            "git_not_installed"
+        );
+        assert_eq!(
+            CommandError::from(ForestError::InvalidRepository).code,
+            "invalid_repository"
+        );
+        assert_eq!(
+            CommandError::from(ForestError::MissingRef("main".into())).code,
+            "missing_ref"
         );
     }
 }

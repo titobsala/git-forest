@@ -1,26 +1,34 @@
 use std::path::PathBuf;
 
-use chrono::Utc;
-
 use crate::domain::{
     AppInfo, ForestConfiguration, ForestError, ForestState, LaunchBehavior, Repository,
-    RepositoryId, RepositoryMode, TerminalProviderId, WorktreeNamingStrategy,
+    TerminalProviderId, WorktreeNamingStrategy,
 };
+use crate::git::GitRunner;
 use crate::persistence::{
-    agent_exists, find_by_path, insert_repository, list_agent_definitions, list_repositories,
-    load_configuration, save_configuration, seed_builtin_agents, Database,
+    agent_exists, list_agent_definitions, list_repositories, load_configuration,
+    save_configuration, seed_builtin_agents, Database,
 };
 use crate::platform::PlatformPaths;
+
+mod naming;
+mod repositories;
+mod worktrees;
 
 pub struct ForestService {
     db: Database,
     platform: PlatformPaths,
+    git: GitRunner,
 }
 
 impl ForestService {
     pub fn initialize(db: Database, platform: PlatformPaths) -> Result<Self, ForestError> {
         db.migrate()?;
-        let service = Self { db, platform };
+        let service = Self {
+            db,
+            platform,
+            git: GitRunner::new(),
+        };
         service.ensure_default_configuration()?;
         seed_builtin_agents(service.db.connection())?;
         let configuration = service.configuration()?;
@@ -74,41 +82,9 @@ impl ForestService {
         &self,
         name: String,
         path: PathBuf,
-        mode: RepositoryMode,
+        _mode: crate::domain::RepositoryMode,
     ) -> Result<ForestState, ForestError> {
-        let name = name.trim().to_owned();
-        if name.is_empty() {
-            return Err(ForestError::EmptyName);
-        }
-
-        let expanded = self.platform.expand_user_path(path);
-        if !expanded.is_absolute() {
-            return Err(ForestError::PathNotAbsolute);
-        }
-        if !expanded.is_dir() {
-            return Err(ForestError::PathNotDirectory);
-        }
-
-        let canonical = expanded
-            .canonicalize()
-            .map_err(|_| ForestError::PathNotDirectory)?;
-        if find_by_path(self.db.connection(), &canonical)?.is_some() {
-            return Err(ForestError::DuplicatePath);
-        }
-
-        let now = Utc::now();
-        insert_repository(
-            self.db.connection(),
-            &Repository {
-                id: RepositoryId::generate(),
-                name,
-                path: canonical,
-                mode,
-                created_at: now,
-                updated_at: now,
-            },
-        )?;
-        self.state()
+        self.import_repository(Some(name), path)
     }
 
     fn persist_configuration(
@@ -135,7 +111,7 @@ impl ForestService {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::ForestService;
     use crate::domain::{
         ForestConfiguration, ForestError, LaunchBehavior, RepositoryMode, TerminalProviderId,
@@ -145,12 +121,12 @@ mod tests {
     use crate::platform::PlatformPaths;
     use std::path::PathBuf;
 
-    struct TempEnv {
-        root: PathBuf,
+    pub(crate) struct TempEnv {
+        pub root: PathBuf,
     }
 
     impl TempEnv {
-        fn new() -> Self {
+        pub fn new() -> Self {
             let root =
                 std::env::temp_dir().join(format!("git-forest-service-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(root.join("app-data")).expect("app data");
@@ -175,7 +151,7 @@ mod tests {
         }
     }
 
-    fn open_service(env: &TempEnv) -> ForestService {
+    pub(crate) fn open_service(env: &TempEnv) -> ForestService {
         let db = Database::open(&env.db_path()).expect("open db");
         ForestService::initialize(db, env.platform()).expect("initialize")
     }
@@ -283,9 +259,11 @@ mod tests {
     }
 
     #[test]
-    fn register_repository_persists_linked_and_managed_modes() {
+    fn register_repository_imports_git_repositories_as_linked() {
         let env = TempEnv::new();
         let service = open_service(&env);
+        crate::git::testing::init_repository_at(&env.root.join("linked"));
+        crate::git::testing::init_repository_at(&env.root.join("managed"));
         service
             .register_repository(
                 "Linked Repo".to_owned(),
@@ -295,20 +273,19 @@ mod tests {
             .expect("linked");
         service
             .register_repository(
-                "Managed Repo".to_owned(),
+                "Also Linked".to_owned(),
                 env.root.join("managed"),
                 RepositoryMode::Managed,
             )
-            .expect("managed");
+            .expect("second");
 
         let repositories = service.list_repositories().expect("list");
         assert_eq!(repositories.len(), 2);
         assert!(repositories
             .iter()
-            .any(|repo| repo.mode == RepositoryMode::Linked && repo.name == "Linked Repo"));
-        assert!(repositories
-            .iter()
-            .any(|repo| repo.mode == RepositoryMode::Managed && repo.name == "Managed Repo"));
+            .all(|repo| repo.mode == RepositoryMode::Linked));
+        assert!(repositories.iter().any(|repo| repo.name == "Linked Repo"));
+        assert!(repositories.iter().any(|repo| repo.name == "Also Linked"));
         assert!(env.root.join("linked").is_dir());
         assert!(env.root.join("managed").is_dir());
     }
@@ -317,6 +294,7 @@ mod tests {
     fn register_repository_rejects_duplicate_path() {
         let env = TempEnv::new();
         let service = open_service(&env);
+        crate::git::testing::init_repository_at(&env.root.join("linked"));
         service
             .register_repository(
                 "First".to_owned(),
@@ -364,6 +342,7 @@ mod tests {
         let env = TempEnv::new();
         {
             let service = open_service(&env);
+            crate::git::testing::init_repository_at(&env.root.join("linked"));
             service
                 .register_repository(
                     "Keep Me".to_owned(),
@@ -375,7 +354,7 @@ mod tests {
 
         let reopened = open_service(&env);
         let state = reopened.state().expect("reopen");
-        assert_eq!(state.schema_version, 1);
+        assert_eq!(state.schema_version, 2);
         assert_eq!(state.repositories.len(), 1);
         assert_eq!(state.repositories[0].name, "Keep Me");
         assert_eq!(state.configuration.default_agent_id.as_str(), "codex");
