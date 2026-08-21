@@ -36,6 +36,9 @@ pub struct Repository {
     pub name: String,
     pub path: PathBuf,
     pub mode: RepositoryMode,
+    pub primary_branch: Option<String>,
+    pub remote_url: Option<String>,
+    pub last_refreshed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -53,6 +56,9 @@ mod tests {
             name: "EXOG App".to_owned(),
             path: PathBuf::from("/tmp/exog-app"),
             mode: RepositoryMode::Linked,
+            primary_branch: Some("main".to_owned()),
+            remote_url: Some("https://example.test/exog.git".to_owned()),
+            last_refreshed_at: Some(Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap()),
             created_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
         };
@@ -62,6 +68,9 @@ mod tests {
         assert_eq!(json["name"], "EXOG App");
         assert_eq!(json["path"], "/tmp/exog-app");
         assert_eq!(json["mode"], "linked");
+        assert_eq!(json["primaryBranch"], "main");
+        assert_eq!(json["remoteUrl"], "https://example.test/exog.git");
+        assert!(json.get("lastRefreshedAt").is_some());
         assert!(json.get("createdAt").is_some());
         assert!(json.get("updatedAt").is_some());
     }

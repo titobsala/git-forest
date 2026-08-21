@@ -12,7 +12,7 @@ impl AppInfo {
         Self {
             name: "Git Forest".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            tagline: "Configuration rooted.".to_owned(),
+            tagline: "Worktrees in reach.".to_owned(),
         }
     }
 }
@@ -27,7 +27,7 @@ mod tests {
 
         assert_eq!(info.name, "Git Forest");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
-        assert_eq!(info.tagline, "Configuration rooted.");
+        assert_eq!(info.tagline, "Worktrees in reach.");
     }
 
     #[test]
@@ -36,6 +36,6 @@ mod tests {
 
         assert_eq!(json["name"], "Git Forest");
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(json["tagline"], "Configuration rooted.");
+        assert_eq!(json["tagline"], "Worktrees in reach.");
     }
 }

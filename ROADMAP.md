@@ -2,15 +2,28 @@
 
 ## Status
 
-Pre-MVP development roadmap.
-
-Target:
+Current implementation:
 
 ```text
-Git Forest 1.0.0
+Release 0.0.4
 ```
 
-The 1.0 release represents the first complete local MVP.
+Completed:
+
+```text
+0.0.1 Repository Bootstrap
+0.0.2 Forest Configuration & Domain Model
+0.0.3 Git-aware repository indexing
+0.0.4 Git worktree lifecycle
+```
+
+Next:
+
+```text
+0.0.5 Terminal Provider System
+```
+
+The 1.0 release remains the first complete local MVP. `WorkspaceSession` from the original 0.0.2 type list is deferred to Release 0.0.8 (Sessions & Process Tracking).
 
 This roadmap deliberately separates **foundational correctness** from richer integrations and future orchestration features.
 
@@ -317,6 +330,8 @@ Every phase should ideally finish with:
 
 # Release 0.0.1 — Repository Bootstrap
 
+Status: **complete**.
+
 ## Goal
 
 Create the smallest correct Git Forest desktop application and establish engineering conventions.
@@ -449,6 +464,10 @@ Both frontend and Rust checks pass.
 
 # Release 0.0.2 — Forest Configuration & Domain Model
 
+Status: **complete**.
+
+`WorkspaceSession` is not implemented here; it belongs to Release 0.0.8.
+
 ## Goal
 
 Define what a Forest actually is before implementing significant Git behavior.
@@ -569,6 +588,10 @@ No Git mutations are required yet.
 
 # Release 0.0.3 — Repository Discovery & Import
 
+Status: **complete**.
+
+0.0.2 shipped naive directory registration. This release extends that seam into Git-aware indexing: validate and resolve repository roots, persist metadata, scan folders with progress/cancellation, search, and index-only removal. New imports are Linked. Existing Managed records remain readable. Bare-repository UX, managed clone/move/delete, and Cockpit navigation are out of scope.
+
 ## Goal
 
 Allow Forest to know which repositories exist.
@@ -680,6 +703,10 @@ User can:
 ---
 
 # Release 0.0.4 — Git Worktree Core
+
+Status: **complete**.
+
+Git is authoritative for worktree facts. SQLite stores Forest IDs and timestamps only. This release lists and reconciles worktrees (including external ones), inspects local status without network, creates a new branch from a local base under `~/forest/worktrees/<repo>/<slug>`, and removes with an explicit dirty/force preflight. Attaching an existing branch, deleting branches, pruning stale Git records, terminal launch, and agent launch remain later work.
 
 ## Goal
 
@@ -2124,23 +2151,23 @@ Dirty work is never silently destroyed.
 
 ## Repository
 
-* [ ] Add existing repository.
-* [ ] Scan folder.
-* [ ] Search repositories.
-* [ ] Remove linked repository from Forest.
-* [ ] Persist repository index.
+* [x] Add existing repository.
+* [x] Scan folder.
+* [x] Search repositories.
+* [x] Remove linked repository from Forest.
+* [x] Persist repository index.
 
 ## Worktrees
 
-* [ ] List existing worktrees.
-* [ ] Detect externally created worktrees.
-* [ ] Create worktree.
-* [ ] Create branch.
-* [ ] Choose base branch.
-* [ ] Display clean/dirty state.
-* [ ] Display basic branch relationship.
-* [ ] Safely remove worktree.
-* [ ] Handle stale worktree metadata.
+* [x] List existing worktrees.
+* [x] Detect externally created worktrees.
+* [x] Create worktree.
+* [x] Create branch.
+* [x] Choose base branch.
+* [x] Display clean/dirty state.
+* [x] Display basic branch relationship.
+* [x] Safely remove worktree.
+* [x] Handle stale worktree metadata.
 
 ## Terminals
 

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listRepositories, registerRepository } from "./repositories";
+import {
+  importRepositories,
+  importRepository,
+  listRepositories,
+  refreshRepository,
+  removeRepository,
+} from "./repositories";
 import { invokeCommand } from "./tauri";
 
 vi.mock("./tauri", () => ({
@@ -16,19 +22,35 @@ describe("repository commands", () => {
     expect(invokeCommand).toHaveBeenCalledWith("list_repositories");
   });
 
-  it("invokes register_repository with the payload", async () => {
+  it("invokes import_repository with the payload", async () => {
     vi.mocked(invokeCommand).mockResolvedValue({ repositories: [] });
 
-    await registerRepository({
+    await importRepository({
       name: "EXOG App",
       path: "/tmp/exog-app",
-      mode: "linked",
     });
 
-    expect(invokeCommand).toHaveBeenCalledWith("register_repository", {
+    expect(invokeCommand).toHaveBeenCalledWith("import_repository", {
       name: "EXOG App",
       path: "/tmp/exog-app",
-      mode: "linked",
+    });
+  });
+
+  it("invokes import_repositories, refresh, and remove", async () => {
+    vi.mocked(invokeCommand).mockResolvedValue({ imported: [] });
+    await importRepositories(["/tmp/exog-app"]);
+    expect(invokeCommand).toHaveBeenCalledWith("import_repositories", {
+      paths: ["/tmp/exog-app"],
+    });
+
+    await refreshRepository("repo-1");
+    expect(invokeCommand).toHaveBeenCalledWith("refresh_repository", {
+      id: "repo-1",
+    });
+
+    await removeRepository("repo-1");
+    expect(invokeCommand).toHaveBeenCalledWith("remove_repository", {
+      id: "repo-1",
     });
   });
 });

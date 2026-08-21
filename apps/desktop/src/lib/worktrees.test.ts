@@ -1,0 +1,49 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createWorktree,
+  getWorktreeRemovalPreview,
+  listWorktrees,
+  removeWorktree,
+} from "./worktrees";
+import { invokeCommand } from "./tauri";
+
+vi.mock("./tauri", () => ({
+  invokeCommand: vi.fn(),
+}));
+
+describe("worktree commands", () => {
+  beforeEach(() => {
+    vi.mocked(invokeCommand).mockResolvedValue([]);
+  });
+
+  it("invokes list, create, preview, and remove commands", async () => {
+    await listWorktrees("repo-1");
+    expect(invokeCommand).toHaveBeenCalledWith("list_worktrees", {
+      repositoryId: "repo-1",
+    });
+
+    await createWorktree({
+      repositoryId: "repo-1",
+      baseRef: "main",
+      branch: "feat/demo",
+    });
+    expect(invokeCommand).toHaveBeenCalledWith("create_worktree", {
+      input: {
+        repositoryId: "repo-1",
+        baseRef: "main",
+        branch: "feat/demo",
+      },
+    });
+
+    await getWorktreeRemovalPreview("wt-1");
+    expect(invokeCommand).toHaveBeenCalledWith("get_worktree_removal_preview", {
+      worktreeId: "wt-1",
+    });
+
+    await removeWorktree("wt-1", true);
+    expect(invokeCommand).toHaveBeenCalledWith("remove_worktree", {
+      worktreeId: "wt-1",
+      force: true,
+    });
+  });
+});

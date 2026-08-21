@@ -2,27 +2,18 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { getForestState } from "../lib/forest";
-import { FALLBACK_FOREST_STATE } from "../types/forest";
+import { FALLBACK_FOREST_STATE, sampleRepository } from "../types/forest";
 
 const nativeState = {
   ...FALLBACK_FOREST_STATE,
   databaseInitialized: true,
-  schemaVersion: 1,
+  schemaVersion: 2,
   appInfo: {
     name: "Git Forest",
-    version: "0.0.2",
-    tagline: "Configuration rooted.",
+    version: "0.0.4",
+    tagline: "Worktrees in reach.",
   },
-  repositories: [
-    {
-      id: "repo-1",
-      name: "EXOG App",
-      path: "/tmp/exog-app",
-      mode: "linked" as const,
-      createdAt: "2026-08-20T09:00:00Z",
-      updatedAt: "2026-08-20T09:00:00Z",
-    },
-  ],
+  repositories: [sampleRepository()],
 };
 
 vi.mock("../lib/forest", () => ({
@@ -31,7 +22,27 @@ vi.mock("../lib/forest", () => ({
 }));
 
 vi.mock("../lib/repositories", () => ({
-  registerRepository: vi.fn(),
+  importRepository: vi.fn(),
+  importRepositories: vi.fn(),
+  refreshRepository: vi.fn(),
+  removeRepository: vi.fn(),
+}));
+
+vi.mock("../lib/scan", () => ({
+  startRepositoryScan: vi.fn(),
+  cancelRepositoryScan: vi.fn(),
+  listenToScanProgress: vi.fn().mockResolvedValue(() => undefined),
+  listenToScanComplete: vi.fn().mockResolvedValue(() => undefined),
+}));
+
+vi.mock("../lib/worktrees", () => ({
+  listWorktrees: vi.fn().mockResolvedValue([]),
+  refreshWorktrees: vi.fn().mockResolvedValue([]),
+  listLocalBranches: vi.fn().mockResolvedValue([]),
+  previewCreateWorktree: vi.fn(),
+  createWorktree: vi.fn(),
+  getWorktreeRemovalPreview: vi.fn(),
+  removeWorktree: vi.fn(),
 }));
 
 describe("App", () => {
@@ -52,9 +63,10 @@ describe("App", () => {
       expect(screen.getByText("EXOG App")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Version 0.0.2")).toBeInTheDocument();
+    expect(screen.getByText("Version 0.0.4")).toBeInTheDocument();
     expect(screen.getByText("Schema version")).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
+    expect(screen.getByText(/main/)).toBeInTheDocument();
   });
 
   it("shows an error and the fallback snapshot when loading fails", async () => {
@@ -71,7 +83,7 @@ describe("App", () => {
       );
     });
 
-    expect(screen.getByText("Version 0.0.2")).toBeInTheDocument();
+    expect(screen.getByText("Version 0.0.4")).toBeInTheDocument();
     expect(
       screen.getByText(FALLBACK_FOREST_STATE.paths.appDataDir),
     ).toBeInTheDocument();

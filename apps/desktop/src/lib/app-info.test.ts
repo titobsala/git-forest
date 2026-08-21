@@ -10,8 +10,8 @@ describe("getAppInfo", () => {
   beforeEach(() => {
     vi.mocked(invokeCommand).mockResolvedValue({
       name: "Git Forest",
-      version: "0.0.2",
-      tagline: "Configuration rooted.",
+      version: "0.0.4",
+      tagline: "Worktrees in reach.",
     });
   });
 
@@ -21,8 +21,8 @@ describe("getAppInfo", () => {
     expect(invokeCommand).toHaveBeenCalledWith("get_app_info");
     expect(info).toEqual({
       name: "Git Forest",
-      version: "0.0.2",
-      tagline: "Configuration rooted.",
+      version: "0.0.4",
+      tagline: "Worktrees in reach.",
     });
   });
 });

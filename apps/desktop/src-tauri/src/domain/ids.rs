@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct RepositoryId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[allow(dead_code)]
 pub struct WorktreeId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,17 +28,14 @@ impl RepositoryId {
 }
 
 impl WorktreeId {
-    #[allow(dead_code)]
     pub fn generate() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
 
-    #[allow(dead_code)]
     pub fn from_string(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         &self.0
     }

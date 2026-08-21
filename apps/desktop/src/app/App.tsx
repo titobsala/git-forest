@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
-import { MilestoneScreen } from "../components/MilestoneScreen";
+import { AppShell } from "../components/AppShell";
+import { ConfigurationPanel } from "../components/ConfigurationPanel";
+import { ForestStatusPanel } from "../components/ForestStatusPanel";
+import { LinkRepositoryForm } from "../components/LinkRepositoryForm";
+import { RepositoryBrowser } from "../components/RepositoryBrowser";
+import { ScanRepositoriesPanel } from "../components/ScanRepositoriesPanel";
+import { WorktreePanel } from "../components/WorktreePanel";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
-import { registerRepository } from "../lib/repositories";
+import {
+  importRepositories,
+  importRepository,
+  refreshRepository,
+  removeRepository,
+} from "../lib/repositories";
 import type {
   ForestConfiguration,
   ForestState,
-  RegisterRepositoryInput,
+  ImportRepositoryInput,
+  ImportRepositoriesResult,
+  RepositoryId,
 } from "../types/forest";
 import { FALLBACK_FOREST_STATE } from "../types/forest";
 import "./app.css";
@@ -18,6 +31,7 @@ export function App() {
   const [state, setState] = useState<ForestState>(FALLBACK_FOREST_STATE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<RepositoryId | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,10 +57,10 @@ export function App() {
     };
   }, []);
 
-  async function handleSaveConfiguration(configuration: ForestConfiguration) {
+  async function runMutation(operation: () => Promise<ForestState>) {
     setBusy(true);
     try {
-      const next = await updateForestConfiguration(configuration);
+      const next = await operation();
       setState(next);
       setError(null);
       setStatus("ready");
@@ -57,19 +71,44 @@ export function App() {
     }
   }
 
-  async function handleRegisterRepository(input: RegisterRepositoryInput) {
+  async function handleSaveConfiguration(configuration: ForestConfiguration) {
+    await runMutation(() => updateForestConfiguration(configuration));
+  }
+
+  async function handleImportRepository(input: ImportRepositoryInput) {
+    await runMutation(() => importRepository(input));
+  }
+
+  async function handleImportRepositories(
+    paths: string[],
+  ): Promise<ImportRepositoriesResult> {
     setBusy(true);
     try {
-      const next = await registerRepository(input);
-      setState(next);
+      const result = await importRepositories(paths);
+      setState(result.state);
       setError(null);
       setStatus("ready");
+      return result;
     } catch (caught: unknown) {
       setError(errorMessage(caught));
+      throw caught;
     } finally {
       setBusy(false);
     }
   }
+
+  async function handleRefresh(id: RepositoryId) {
+    await runMutation(() => refreshRepository(id));
+  }
+
+  async function handleRemove(id: RepositoryId) {
+    await runMutation(() => removeRepository(id));
+    setSelectedId((current) => (current === id ? null : current));
+  }
+
+  const selectedRepository =
+    state.repositories.find((repository) => repository.id === selectedId) ??
+    null;
 
   if (status === "loading") {
     return (
@@ -80,16 +119,40 @@ export function App() {
   }
 
   return (
-    <MilestoneScreen
-      state={state}
-      error={error}
-      busy={busy}
-      onSaveConfiguration={(configuration) => {
-        void handleSaveConfiguration(configuration);
-      }}
-      onRegisterRepository={(input) => {
-        void handleRegisterRepository(input);
-      }}
-    />
+    <AppShell state={state} error={error}>
+      <ForestStatusPanel state={state} />
+      <ConfigurationPanel
+        state={state}
+        busy={busy}
+        onSave={(configuration) => {
+          void handleSaveConfiguration(configuration);
+        }}
+      />
+      <LinkRepositoryForm
+        busy={busy}
+        onImport={(input) => {
+          void handleImportRepository(input);
+        }}
+      />
+      <ScanRepositoriesPanel
+        busy={busy}
+        onImport={(paths) => handleImportRepositories(paths)}
+      />
+      <RepositoryBrowser
+        repositories={state.repositories}
+        busy={busy}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onRefresh={(id) => {
+          void handleRefresh(id);
+        }}
+        onRemove={(id) => {
+          void handleRemove(id);
+        }}
+      />
+      {selectedRepository ? (
+        <WorktreePanel repository={selectedRepository} busy={busy} />
+      ) : null}
+    </AppShell>
   );
 }

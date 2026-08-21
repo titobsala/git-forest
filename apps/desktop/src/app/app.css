@@ -206,32 +206,74 @@ button:disabled {
   color: var(--fg-muted);
 }
 
-.repository-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.button-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.repository-list li {
-  display: grid;
-  grid-template-columns: minmax(8rem, auto) auto 1fr;
-  gap: 0.55rem 0.8rem;
+  flex-wrap: wrap;
+  gap: 0.55rem;
   align-items: center;
 }
 
+button.secondary {
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.repository-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.repository-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.repository-select {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) auto 1fr;
+  grid-template-areas:
+    "name badge path"
+    "meta meta meta";
+  gap: 0.35rem 0.8rem;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  color: inherit;
+  border-color: var(--border);
+}
+
+.repository-select.selected {
+  border-color: var(--fg);
+}
+
 .repository-name {
+  grid-area: name;
   font-weight: 600;
 }
 
 .repository-path {
+  grid-area: path;
   overflow-wrap: anywhere;
   color: var(--fg-muted);
 }
 
+.repository-meta {
+  grid-area: meta;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
 .mode-badge {
+  grid-area: badge;
   justify-self: start;
   padding: 0.1rem 0.45rem;
   border: 1px solid var(--border);
@@ -245,4 +287,61 @@ button:disabled {
 .mode-managed {
   color: var(--fg);
   border-color: var(--fg);
+}
+
+.confirm-copy {
+  margin: 0;
+}
+
+.candidate-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.candidate-row {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+button.danger {
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--fg);
+  font-weight: 650;
+}
+
+.worktree-list {
+  list-style: none;
+  margin: 0.85rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.worktree-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.worktree-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.confirm-box {
+  padding: 0.85rem;
+  border: 1px solid var(--fg);
+}
+
+h3 {
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
 }
