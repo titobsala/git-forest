@@ -107,4 +107,54 @@ describe("ScanRepositoriesPanel", () => {
       expect(onImport).toHaveBeenCalledWith(["/tmp/projects/exog-app"]);
     });
   });
+  it("does not restore a scan ID that completed before start returned", async () => {
+    let completeHandler: ((payload: ScanCompletedPayload) => void) | undefined;
+    let resolveStart: ((scanId: string) => void) | undefined;
+    vi.mocked(listenToScanProgress).mockResolvedValue(() => undefined);
+    vi.mocked(listenToScanComplete).mockImplementation(async (handler) => {
+      completeHandler = handler;
+      return () => undefined;
+    });
+    vi.mocked(startRepositoryScan).mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveStart = resolve;
+        }),
+    );
+
+    render(
+      <ScanRepositoriesPanel
+        busy={false}
+        onImport={vi.fn().mockResolvedValue({
+          imported: [],
+          skipped: [],
+          failed: [],
+          state: FALLBACK_FOREST_STATE,
+        })}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Scan root"), {
+      target: { value: "/tmp/empty" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    await waitFor(() => expect(startRepositoryScan).toHaveBeenCalled());
+
+    completeHandler?.({
+      scanId: "scan-fast",
+      directoriesVisited: 1,
+      cancelled: false,
+      warnings: [],
+      candidates: [],
+    });
+    resolveStart?.("scan-fast");
+
+    expect(await screen.findByText(/Scan complete/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled();
+      expect(
+        screen.getByRole("button", { name: "Cancel scan" }),
+      ).toBeDisabled();
+    });
+  });
 });

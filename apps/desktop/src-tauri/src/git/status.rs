@@ -22,7 +22,10 @@ pub fn inspect_worktree_status(
         return Err(ForestError::WorktreeMissing);
     }
 
-    let output = git.run_success(path, &["status", "--porcelain=v2", "--branch", "-z"])?;
+    let output = git.run_success(
+        path,
+        &["status", "--porcelain=v2", "--branch", "--ignored", "-z"],
+    )?;
     Ok(parse_status_v2(&output.stdout))
 }
 
@@ -38,7 +41,7 @@ pub fn parse_status_v2(stdout: &[u8]) -> WorktreeStatus {
         }
         match chunk.as_bytes().first().copied() {
             Some(b'1' | b'2' | b'u') => status.tracked_changes += 1,
-            Some(b'?') => status.untracked_files += 1,
+            Some(b'?' | b'!') => status.untracked_files += 1,
             _ => {}
         }
     }
@@ -98,11 +101,11 @@ mod tests {
     #[test]
     fn parses_ahead_behind_and_change_counts() {
         let status = parse_status_v2(
-            b"# branch.oid abcdef\n# branch.head feat/demo\n# branch.ab +2 -3\n1 .M N... file.txt\0? untracked.txt\0",
+            b"# branch.oid abcdef\n# branch.head feat/demo\n# branch.ab +2 -3\n1 .M N... file.txt\0? untracked.txt\0! ignored.env\0",
         );
         assert_eq!(status.branch.as_deref(), Some("feat/demo"));
         assert_eq!(status.tracked_changes, 1);
-        assert_eq!(status.untracked_files, 1);
+        assert_eq!(status.untracked_files, 2);
         assert_eq!(status.ahead, Some(2));
         assert_eq!(status.behind, Some(3));
         assert!(!status.detached);
@@ -138,5 +141,17 @@ mod tests {
         let status = inspect_worktree_status(&GitRunner::new(), &clone).expect("status");
         assert_eq!(status.ahead, Some(1));
         assert_eq!(status.behind, Some(0));
+    }
+
+    #[test]
+    fn inspects_ignored_files_as_local_files() {
+        let env = TempGit::new();
+        let repo = env.init_repo("ignored");
+        env.commit_file(&repo, ".gitignore", ".env\n", "ignore local environment");
+        fs::write(repo.join(".env"), "SECRET=local\n").expect("ignored file");
+
+        let status = inspect_worktree_status(&GitRunner::new(), &repo).expect("status");
+        assert_eq!(status.tracked_changes, 0);
+        assert_eq!(status.untracked_files, 1);
     }
 }

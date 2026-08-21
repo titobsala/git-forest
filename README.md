@@ -70,7 +70,7 @@ The window shows Forest status and configuration, then lets you:
 
 Restarting the app keeps that index. Schema version 2 adds repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`) without dropping 0.0.2 rows.
 
-Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>/<worktree-slug>`. Removing a repository or a clean worktree never deletes Git branches; dirty worktree removal requires an explicit force action.
+Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>`, so repositories with the same name remain isolated. Removing a repository or a clean worktree never deletes Git branches; worktrees containing tracked, untracked, or ignored local changes require an explicit force action.
 
 Limitations in this release:
 
@@ -91,7 +91,7 @@ After `bun run dev`:
 2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.
 3. Search by name, path, branch, or remote; refresh metadata; restart and confirm the index remains.
 4. Remove a repository from Forest and confirm the directory is still on disk.
-5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>/`.
+5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>-<repository-id>/`.
 6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists.
 
 ## Commands

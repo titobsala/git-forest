@@ -154,7 +154,7 @@ impl ForestService {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .unwrap_or(input.branch.trim());
-        let repository_slug = slugify(&repository.name);
+        let repository_slug = format!("{}-{}", slugify(&repository.name), repository.id.as_str());
         validate_slug(&repository_slug)?;
         let worktree_slug = filename_safe(source, configuration.worktree_naming_strategy);
         validate_slug(&worktree_slug)?;
@@ -343,21 +343,15 @@ fn summarize(
     };
 
     if present {
-        match inspect_worktree_status(git, &record.path) {
-            Ok(status) => {
-                if summary.branch.is_none() {
-                    summary.branch = status.branch;
-                }
-                summary.detached = summary.detached || status.detached;
-                summary.tracked_changes = status.tracked_changes;
-                summary.untracked_files = status.untracked_files;
-                summary.ahead = status.ahead;
-                summary.behind = status.behind;
-            }
-            Err(_) => {
-                summary.present = record.path.exists();
-            }
+        let status = inspect_worktree_status(git, &record.path)?;
+        if summary.branch.is_none() {
+            summary.branch = status.branch;
         }
+        summary.detached = summary.detached || status.detached;
+        summary.tracked_changes = status.tracked_changes;
+        summary.untracked_files = status.untracked_files;
+        summary.ahead = status.ahead;
+        summary.behind = status.behind;
     }
     Ok(summary)
 }
@@ -444,10 +438,10 @@ mod tests {
             .expect("create");
 
         assert_eq!(result.worktree.branch.as_deref(), Some("feat/risk-483"));
-        assert!(result
-            .worktree
-            .path
-            .ends_with("worktrees/demo-app/feat-risk-483"));
+        assert!(result.worktree.path.ends_with(format!(
+            "worktrees/demo-app-{}/feat-risk-483",
+            repository.id.as_str()
+        )));
         assert!(result.worktree.path.is_dir());
         assert!(!result.worktree.is_primary);
         assert_eq!(result.worktree.tracked_changes, 0);
@@ -611,5 +605,86 @@ mod tests {
             .expect("preview");
         assert!(preview.blockers.contains(&RemovalBlocker::ActiveSession));
         assert!(preview.requires_force);
+    }
+    #[test]
+    fn repository_identity_separates_same_named_worktree_namespaces() {
+        let env = TempEnv::new();
+        let (service, first) = imported_repo(&env);
+        let second_path = env.root.join("linked-second");
+        init_repository_at(&second_path);
+        run_git(&second_path, &["commit", "--allow-empty", "-m", "initial"]);
+        let second = service
+            .import_repository(Some("Demo App".into()), second_path)
+            .expect("import second")
+            .repositories
+            .into_iter()
+            .find(|repository| repository.id != first.id)
+            .expect("second repository");
+
+        let first_preview = service
+            .preview_create_worktree(CreateWorktreeInput {
+                repository_id: first.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/shared".into(),
+                name: None,
+            })
+            .expect("first preview");
+        let second_preview = service
+            .preview_create_worktree(CreateWorktreeInput {
+                repository_id: second.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/shared".into(),
+                name: None,
+            })
+            .expect("second preview");
+
+        assert_ne!(
+            first_preview.repository_slug,
+            second_preview.repository_slug
+        );
+        assert_ne!(first_preview.destination, second_preview.destination);
+        assert!(first_preview.repository_slug.ends_with(first.id.as_str()));
+        assert!(second_preview.repository_slug.ends_with(second.id.as_str()));
+    }
+
+    #[test]
+    fn remove_requires_force_when_a_worktree_only_contains_ignored_files() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        fs::write(repository.path.join(".gitignore"), ".env\n").expect("gitignore");
+        run_git(&repository.path, &["add", ".gitignore"]);
+        run_git(
+            &repository.path,
+            &["commit", "-m", "ignore local environment"],
+        );
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/ignored".into(),
+                name: None,
+            })
+            .expect("create");
+        fs::write(created.worktree.path.join(".env"), "SECRET=local\n").expect("ignored file");
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id)
+            .expect("preview");
+        assert!(!preview.allowed);
+        assert!(preview.requires_force);
+        assert!(preview.blockers.contains(&RemovalBlocker::Untracked));
+        assert!(created.worktree.path.exists());
+    }
+
+    #[test]
+    fn status_failures_are_propagated_during_reconciliation() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        fs::write(repository.path.join(".git/index"), "corrupt").expect("corrupt index");
+
+        let error = service
+            .list_worktrees(repository.id)
+            .expect_err("status failure");
+        assert!(matches!(error, ForestError::GitCommandFailed(_)));
     }
 }

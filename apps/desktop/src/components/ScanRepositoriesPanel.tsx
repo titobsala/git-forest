@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { pickDirectory } from "../lib/dialog";
 import {
   cancelRepositoryScan,
@@ -30,6 +30,7 @@ export function ScanRepositoriesPanel({
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const completedScanIds = useRef(new Set<string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -50,8 +51,15 @@ export function ScanRepositoriesPanel({
     void Promise.resolve(
       listenToScanComplete((payload) => {
         if (!cancelled) {
+          completedScanIds.current.add(payload.scanId);
           setCompleted(payload);
-          setScanId(null);
+          setScanId((current) => {
+            if (current === payload.scanId) {
+              completedScanIds.current.delete(payload.scanId);
+              return null;
+            }
+            return current;
+          });
           setSelected(defaultSelection(payload.candidates));
         }
       }),
@@ -83,7 +91,9 @@ export function ScanRepositoriesPanel({
     setProgress(null);
     try {
       const id = await startRepositoryScan(root.trim(), maxDepth);
-      setScanId(id);
+      if (!completedScanIds.current.delete(id)) {
+        setScanId(id);
+      }
     } catch (error) {
       setScanError(errorMessage(error));
     }
