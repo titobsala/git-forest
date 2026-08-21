@@ -1,347 +1,196 @@
-:root {
-  color-scheme: light;
-  font-family:
-    "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
-  line-height: 1.45;
-  font-weight: 400;
-  --bg: #ffffff;
-  --bg-muted: #f4f4f5;
-  --fg: #18181b;
-  --fg-muted: #52525b;
-  --border: #d4d4d8;
-  --accent: #18181b;
-  --accent-fg: #ffffff;
-  --danger-bg: #fafafa;
-  --danger-border: #a1a1aa;
-  --danger-fg: #18181b;
-  --focus: #18181b;
-  color: var(--fg);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
+@import "tailwindcss";
 
-@media (prefers-color-scheme: dark) {
+/* Self-hosted fonts — docs/design.md section 2.2. Bundled locally so the app
+   never depends on a font CDN (AGENTS.md section 29, and the Tauri CSP has no
+   remote font host). */
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
+@import "../styles/tokens.css";
+
+@layer base {
   :root {
-    color-scheme: dark;
-    --bg: #09090b;
-    --bg-muted: #18181b;
-    --fg: #fafafa;
-    --fg-muted: #a1a1aa;
-    --border: #3f3f46;
-    --accent: #fafafa;
-    --accent-fg: #09090b;
-    --danger-bg: #18181b;
-    --danger-border: #52525b;
-    --danger-fg: #fafafa;
-    --focus: #fafafa;
+    color-scheme: light;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--canvas-bg);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow: hidden;
+  }
+
+  /* Keyboard-first: focus must always be visible (AGENTS.md section 43). */
+  :focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 1px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
   }
 }
 
-* {
-  box-sizing: border-box;
+/*
+ * Shared primitives.
+ *
+ * Declared with `@utility` rather than as plain classes so they compose with
+ * Tailwind's variants and can be `@apply`-ed by the settings form styles below.
+ */
+
+/* Dense telemetry pill shared by every status badge. */
+@utility gf-badge {
+  @apply inline-flex items-center gap-1 rounded-sm px-1.5 py-px font-mono text-micro whitespace-nowrap;
 }
 
-html,
-body,
-#root {
-  margin: 0;
-  min-height: 100%;
-  background: var(--bg);
+@utility gf-badge-high {
+  @apply bg-badge-high text-badge-high-ink;
 }
 
-body {
-  min-height: 100vh;
+@utility gf-badge-mod {
+  @apply bg-badge-mod text-badge-mod-ink;
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+@utility gf-badge-good {
+  @apply bg-badge-good text-badge-good-ink;
 }
 
-.milestone {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  padding: 1.75rem 2rem 2.5rem;
-  background: var(--bg);
+@utility gf-badge-neutral {
+  @apply bg-canvas text-ink-muted;
 }
 
-.milestone-header h1,
-.milestone h1 {
-  margin: 0;
-  font-size: 1.85rem;
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  color: var(--fg);
+/* Surface container: white card on the canvas stage. */
+@utility gf-surface {
+  @apply rounded-md border border-card-border bg-card;
 }
 
-.milestone .version {
-  margin: 0.55rem 0 0;
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
+@utility gf-input {
+  @apply w-full rounded-sm border border-card-border bg-card px-2 py-1 text-body text-ink placeholder:text-ink-muted/70;
 }
 
-.milestone .tagline {
-  margin: 0.7rem 0 0;
-  max-width: 28rem;
-  font-size: 1.05rem;
-  color: var(--fg-muted);
+@utility gf-button {
+  @apply inline-flex items-center gap-1.5 rounded-sm border border-card-border bg-card px-2 py-1 text-body text-ink transition-colors hover:border-brand disabled:opacity-50 disabled:hover:border-card-border;
 }
 
-.banner {
-  margin: 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--danger-border);
-  background: var(--danger-bg);
-  color: var(--danger-fg);
+@utility gf-button-primary {
+  @apply border-brand bg-brand text-white hover:brightness-105 disabled:opacity-50;
 }
 
-.panel {
-  padding: 1rem 1.1rem 1.15rem;
-  border: 1px solid var(--border);
-  background: var(--bg-muted);
+@utility gf-button-danger {
+  @apply border-badge-high-ink/40 text-badge-high-ink hover:border-badge-high-ink;
 }
 
-.panel h2 {
-  margin: 0 0 0.85rem;
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
+/* Keyboard hint chip used in the launcher and toolbars. */
+@utility gf-keyhint {
+  @apply inline-flex items-center gap-1 rounded-xs border border-card-border bg-canvas px-1 py-px font-mono text-micro text-ink-muted;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 0.75rem 1.25rem;
-  margin: 0;
+@utility gf-label {
+  @apply text-body font-semibold text-ink-muted;
 }
 
-.status-grid div {
-  margin: 0;
-}
+@layer components {
+  /*
+   * Settings form primitives.
+   *
+   * The configuration, link and scan panels are unchanged from release 0.0.3;
+   * they are re-skinned here onto the design tokens instead of being rewritten,
+   * so their behaviour and tests stay intact. Scoped under `.panel` so the
+   * shell's own controls are unaffected.
+   */
+  .panel {
+    @apply gf-surface p-3;
+  }
 
-.status-grid dt {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-}
+  .panel h2 {
+    @apply mb-2 text-heading text-ink;
+  }
 
-.status-grid dd {
-  margin: 0.2rem 0 0;
-  overflow-wrap: anywhere;
-  color: var(--fg);
-}
+  .panel h3 {
+    @apply mt-1 mb-1 text-heading text-ink;
+  }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
+  .panel .hint {
+    @apply mb-2 text-body text-ink-muted;
+  }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
+  .panel .banner {
+    @apply mb-2 rounded-sm bg-badge-high px-2 py-1 text-body text-badge-high-ink;
+  }
 
-.field span,
-.mode-fieldset legend {
-  font-size: 0.85rem;
-  color: var(--fg);
-}
+  .panel .stack {
+    @apply flex flex-col gap-2;
+  }
 
-input,
-select,
-button {
-  font: inherit;
-  color: inherit;
-}
+  .panel .field {
+    @apply flex flex-col gap-1;
+  }
 
-input,
-select {
-  width: 100%;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
-}
+  .panel .field span,
+  .panel legend {
+    @apply text-body text-ink-muted;
+  }
 
-.mode-fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  display: flex;
-  gap: 1rem;
-}
+  .panel input,
+  .panel select {
+    @apply gf-input;
+  }
 
-.mode-fieldset label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+  .panel input[type="checkbox"],
+  .panel input[type="radio"] {
+    @apply size-3.5 w-auto accent-[var(--brand-accent)];
+  }
 
-button {
-  align-self: flex-start;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-fg);
-  cursor: pointer;
-}
+  .panel fieldset {
+    @apply m-0 flex gap-3 border-0 p-0;
+  }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
+  .panel fieldset label {
+    @apply flex items-center gap-1.5 text-body;
+  }
 
-.hint {
-  margin: 0 0 0.85rem;
-  color: var(--fg-muted);
-}
+  .panel button {
+    @apply gf-button gf-button-primary;
+  }
 
-.button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  align-items: center;
-}
+  .panel button.secondary {
+    @apply border-card-border bg-card text-ink hover:border-brand hover:brightness-100;
+  }
 
-button.secondary {
-  background: var(--bg);
-  color: var(--fg);
-  border-color: var(--border);
-}
+  .panel .button-row {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
 
-.repository-list {
-  list-style: none;
-  margin: 0.85rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
+  .panel .candidate-list {
+    @apply m-0 flex flex-col gap-1 border-0 p-0;
+  }
 
-.repository-list li {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.75rem 0 0;
-  border-top: 1px solid var(--border);
-}
+  .panel .candidate-row {
+    @apply flex items-start gap-1.5 font-mono text-mono-code;
+  }
 
-.repository-select {
-  display: grid;
-  grid-template-columns: minmax(8rem, auto) auto 1fr;
-  grid-template-areas:
-    "name badge path"
-    "meta meta meta";
-  gap: 0.35rem 0.8rem;
-  width: 100%;
-  text-align: left;
-  background: var(--bg);
-  color: inherit;
-  border-color: var(--border);
-}
-
-.repository-select.selected {
-  border-color: var(--fg);
-}
-
-.repository-name {
-  grid-area: name;
-  font-weight: 600;
-}
-
-.repository-path {
-  grid-area: path;
-  overflow-wrap: anywhere;
-  color: var(--fg-muted);
-}
-
-.repository-meta {
-  grid-area: meta;
-  color: var(--fg-muted);
-  font-size: 0.85rem;
-  overflow-wrap: anywhere;
-}
-
-.mode-badge {
-  grid-area: badge;
-  justify-self: start;
-  padding: 0.1rem 0.45rem;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-}
-
-.mode-managed {
-  color: var(--fg);
-  border-color: var(--fg);
-}
-
-.confirm-copy {
-  margin: 0;
-}
-
-.candidate-list {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.candidate-row {
-  display: flex;
-  gap: 0.55rem;
-  align-items: flex-start;
-}
-
-button.danger {
-  background: var(--bg);
-  color: var(--fg);
-  border-color: var(--fg);
-  font-weight: 650;
-}
-
-.worktree-list {
-  list-style: none;
-  margin: 0.85rem 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.worktree-list li {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.worktree-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.confirm-box {
-  padding: 0.85rem;
-  border: 1px solid var(--fg);
-}
-
-h3 {
-  margin: 0.4rem 0 0;
-  font-size: 1rem;
+  .panel .warning-list {
+    @apply flex flex-col gap-1 text-body text-badge-mod-ink;
+  }
 }

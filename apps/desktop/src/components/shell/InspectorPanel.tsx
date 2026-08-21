@@ -1,0 +1,292 @@
+/**
+ * Right inspector panel — docs/design.md section 3.1.
+ *
+ * Metadata for the selected worktree: root path, drift and stash telemetry,
+ * agent attach actions, and the safe deletion control (which keeps the
+ * blocker/force confirmation flow required by AGENTS.md section 44).
+ */
+
+import { useEffect, useState } from "react";
+import { errorMessage } from "../../lib/errors";
+import { getWorktreeRemovalPreview, removeWorktree } from "../../lib/worktrees";
+import type {
+  ForestConfiguration,
+  AgentDefinition,
+  Repository,
+  Worktree,
+  WorktreeRemovalPreview,
+} from "../../types/forest";
+import { AgentBadge } from "../deferred/AgentBadge";
+import { StashPill } from "../deferred/StashPill";
+import { TerminalActions } from "../deferred/TerminalActions";
+import {
+  branchLabel,
+  driftLabel,
+  telemetryBadges,
+} from "../../features/cockpit/telemetry";
+import { ChevronIcon } from "./icons";
+
+interface InspectorPanelProps {
+  repository: Repository | null;
+  worktree: Worktree | null;
+  configuration: ForestConfiguration;
+  agentDefinitions: AgentDefinition[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onWorktreesChanged: (worktrees: Worktree[]) => void;
+  onRemoved: () => void;
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-micro font-semibold tracking-wide text-ink-muted uppercase">
+        {label}
+      </dt>
+      <dd className="font-mono text-mono-code break-all text-ink">{value}</dd>
+    </div>
+  );
+}
+
+export function InspectorPanel({
+  repository,
+  worktree,
+  configuration,
+  agentDefinitions,
+  collapsed,
+  onToggleCollapsed,
+  onWorktreesChanged,
+  onRemoved,
+}: InspectorPanelProps) {
+  const [preview, setPreview] = useState<WorktreeRemovalPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Any change of selection invalidates a pending destructive confirmation.
+  useEffect(() => {
+    setPreview(null);
+    setError(null);
+  }, [worktree?.id]);
+
+  if (collapsed) {
+    return (
+      <div className="flex w-collapsed shrink-0 flex-col items-center border-l border-card-border bg-card py-2">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label="Expand inspector panel"
+          aria-expanded={false}
+          title="Expand inspector panel"
+          className="grid size-7 place-items-center rounded-sm text-ink-muted hover:bg-canvas hover:text-ink"
+        >
+          <ChevronIcon className="rotate-180" />
+        </button>
+        <span className="mt-3 font-mono text-micro text-ink-muted [writing-mode:vertical-rl]">
+          Inspector
+        </span>
+      </div>
+    );
+  }
+
+  const agentName =
+    agentDefinitions.find((agent) => agent.id === configuration.defaultAgentId)
+      ?.name ?? configuration.defaultAgentId;
+
+  async function handlePreviewRemove() {
+    if (!worktree) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      setPreview(await getWorktreeRemovalPreview(worktree.id));
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(force: boolean) {
+    if (!preview) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await removeWorktree(preview.worktree.id, force);
+      onWorktreesChanged(result.worktrees);
+      if (result.removed) {
+        setPreview(null);
+        onRemoved();
+      } else if (result.blockers.length > 0) {
+        setPreview({
+          ...preview,
+          allowed: false,
+          requiresForce: result.requiresForce,
+          blockers: result.blockers,
+        });
+      }
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <aside
+      aria-label="Worktree inspector"
+      className="flex w-inspector shrink-0 flex-col border-l border-card-border bg-card"
+    >
+      <div className="flex items-center gap-1 border-b border-card-border px-3 py-1.5">
+        <h2 className="text-heading text-ink">Inspector</h2>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label="Collapse inspector panel"
+          aria-expanded
+          title="Collapse inspector panel"
+          className="ml-auto grid size-6 place-items-center rounded-sm text-ink-muted hover:bg-canvas hover:text-ink"
+        >
+          <ChevronIcon />
+        </button>
+      </div>
+
+      {!worktree || !repository ? (
+        <p className="px-3 py-4 text-body text-ink-muted">
+          Select a worktree to inspect its telemetry.
+        </p>
+      ) : (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+          <div>
+            <p className="font-mono text-heading break-all text-ink">
+              {branchLabel(worktree)}
+            </p>
+            <p className="text-body text-ink-muted">{repository.name}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1">
+            {telemetryBadges(worktree).map((badge) => (
+              <span
+                key={badge.id}
+                className={`gf-badge gf-badge-${badge.tone}`}
+                title={badge.title}
+              >
+                {badge.label}
+              </span>
+            ))}
+            {worktree.isPrimary ? (
+              <span className="gf-badge gf-badge-neutral">primary</span>
+            ) : null}
+            <StashPill count={null} />
+            <AgentBadge session={null} />
+          </div>
+
+          <dl className="space-y-2">
+            <Field label="Root path" value={worktree.path} />
+            <Field label="Repository" value={repository.path} />
+            <Field label="Head" value={worktree.head ?? "—"} />
+            <Field
+              label="Drift"
+              value={driftLabel(worktree) ?? "in sync with upstream"}
+            />
+            <Field
+              label="Changes"
+              value={`${worktree.trackedChanges} tracked · ${worktree.untrackedFiles} untracked`}
+            />
+            {worktree.locked ? (
+              <Field
+                label="Lock reason"
+                value={worktree.lockReason ?? "locked"}
+              />
+            ) : null}
+            <Field label="Updated" value={worktree.updatedAt} />
+          </dl>
+
+          <div className="space-y-1.5">
+            <p className="gf-label">Session</p>
+            <TerminalActions
+              terminalName={configuration.defaultTerminal}
+              agentName={agentName}
+            />
+            <p className="text-micro text-ink-muted">
+              Terminal launching lands in release 0.0.5, agent sessions in
+              0.0.6.
+            </p>
+          </div>
+
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-sm bg-badge-high px-2 py-1 text-body text-badge-high-ink"
+            >
+              {error}
+            </p>
+          ) : null}
+
+          <div className="space-y-1.5 border-t border-card-border pt-3">
+            <p className="gf-label">Danger zone</p>
+            {!preview ? (
+              <button
+                type="button"
+                className="gf-button gf-button-danger"
+                disabled={busy}
+                onClick={() => void handlePreviewRemove()}
+              >
+                Remove worktree
+              </button>
+            ) : (
+              <div
+                role="region"
+                aria-label="Remove worktree"
+                className="space-y-2 rounded-sm border border-badge-high-ink/40 p-2"
+              >
+                <p className="text-body text-ink">
+                  Remove {preview.worktree.name}?
+                </p>
+                <p className="text-body text-ink-muted">
+                  {preview.worktree.trackedChanges} modified,{" "}
+                  {preview.worktree.untrackedFiles} untracked.
+                  {preview.blockers.length > 0
+                    ? ` Blocked: ${preview.blockers.join(", ")}.`
+                    : " This worktree is clean."}{" "}
+                  The branch is kept.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    className="gf-button"
+                    onClick={() => setPreview(null)}
+                  >
+                    Cancel
+                  </button>
+                  {preview.allowed ? (
+                    <button
+                      type="button"
+                      className="gf-button gf-button-danger"
+                      disabled={busy}
+                      onClick={() => void handleRemove(false)}
+                    >
+                      Remove worktree
+                    </button>
+                  ) : null}
+                  {preview.requiresForce ? (
+                    <button
+                      type="button"
+                      className="gf-button gf-button-danger"
+                      disabled={busy}
+                      onClick={() => void handleRemove(true)}
+                    >
+                      Force remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}

@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
-import { AppShell } from "../components/AppShell";
-import { ConfigurationPanel } from "../components/ConfigurationPanel";
-import { ForestStatusPanel } from "../components/ForestStatusPanel";
-import { LinkRepositoryForm } from "../components/LinkRepositoryForm";
-import { RepositoryBrowser } from "../components/RepositoryBrowser";
-import { ScanRepositoriesPanel } from "../components/ScanRepositoriesPanel";
-import { WorktreePanel } from "../components/WorktreePanel";
+import { useEffect, useMemo, useState } from "react";
+import { AppShell } from "../components/shell/AppShell";
+import { InspectorPanel } from "../components/shell/InspectorPanel";
+import { L1Rail } from "../components/shell/L1Rail";
+import { L2RepositoryPanel } from "../components/shell/L2RepositoryPanel";
+import { TopBar } from "../components/shell/TopBar";
+import { AgentMonitorView } from "../features/agents/AgentMonitorView";
+import { CockpitView } from "../features/cockpit/CockpitView";
+import { CreateWorktreeDialog } from "../features/cockpit/CreateWorktreeDialog";
+import { isDirty } from "../features/cockpit/telemetry";
+import { QuickLaunch } from "../features/launcher/QuickLaunch";
+import { SettingsView } from "../features/settings/SettingsView";
+import { TrayIndicator } from "../features/tray/TrayIndicator";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
 import {
@@ -19,9 +26,13 @@ import type {
   ForestState,
   ImportRepositoryInput,
   ImportRepositoriesResult,
+  Repository,
   RepositoryId,
+  Worktree,
+  WorktreeId,
 } from "../types/forest";
 import { FALLBACK_FOREST_STATE } from "../types/forest";
+import type { ViewId } from "./views";
 import "./app.css";
 
 type LoadStatus = "loading" | "ready" | "error";
@@ -31,7 +42,17 @@ export function App() {
   const [state, setState] = useState<ForestState>(FALLBACK_FOREST_STATE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [view, setView] = useState<ViewId>("cockpit");
   const [selectedId, setSelectedId] = useState<RepositoryId | null>(null);
+  const [selectedWorktreeId, setSelectedWorktreeId] =
+    useState<WorktreeId | null>(null);
+  const [repositoriesCollapsed, setRepositoriesCollapsed] = useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const [creatingIn, setCreatingIn] = useState<Repository | null>(null);
+
+  const index = useWorktreeIndex(state.repositories);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +77,12 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useKeyboardShortcuts(launcherOpen ? ["overlay", "global"] : ["global"], {
+    "launcher.toggle": () => setLauncherOpen((current) => !current),
+    "view.cockpit": () => setView("cockpit"),
+    "overlay.close": () => setLauncherOpen(false),
+  });
 
   async function runMutation(operation: () => Promise<ForestState>) {
     setBusy(true);
@@ -97,62 +124,182 @@ export function App() {
     }
   }
 
-  async function handleRefresh(id: RepositoryId) {
+  async function handleRefreshRepository(id: RepositoryId) {
     await runMutation(() => refreshRepository(id));
+    index.refresh(id);
   }
 
-  async function handleRemove(id: RepositoryId) {
+  async function handleRemoveRepository(id: RepositoryId) {
     await runMutation(() => removeRepository(id));
+    index.forget(id);
     setSelectedId((current) => (current === id ? null : current));
+  }
+
+  function selectWorktree(worktree: Worktree, repository: Repository) {
+    setSelectedId(repository.id);
+    setSelectedWorktreeId(worktree.id);
   }
 
   const selectedRepository =
     state.repositories.find((repository) => repository.id === selectedId) ??
     null;
 
+  const selectedWorktree = useMemo(() => {
+    if (!selectedWorktreeId) {
+      return null;
+    }
+    return (
+      index.flat.find((row) => row.worktree.id === selectedWorktreeId)
+        ?.worktree ?? null
+    );
+  }, [index.flat, selectedWorktreeId]);
+
+  const trayCounts = useMemo(
+    () => ({
+      worktrees: index.flat.length,
+      dirty: index.flat.filter((row) => isDirty(row.worktree)).length,
+      // Awaiting agent session tracking (releases 0.0.6 / 0.0.8).
+      agents: null,
+    }),
+    [index.flat],
+  );
+
   if (status === "loading") {
     return (
-      <main className="milestone">
-        <p>Loading Forest…</p>
-      </main>
+      <div className="grid h-full place-items-center bg-canvas">
+        <p className="text-body text-ink-muted">Loading Forest…</p>
+      </div>
     );
   }
 
   return (
-    <AppShell state={state} error={error}>
-      <ForestStatusPanel state={state} />
-      <ConfigurationPanel
-        state={state}
-        busy={busy}
-        onSave={(configuration) => {
-          void handleSaveConfiguration(configuration);
-        }}
-      />
-      <LinkRepositoryForm
-        busy={busy}
-        onImport={(input) => {
-          void handleImportRepository(input);
-        }}
-      />
-      <ScanRepositoriesPanel
-        busy={busy}
-        onImport={(paths) => handleImportRepositories(paths)}
-      />
-      <RepositoryBrowser
-        repositories={state.repositories}
-        busy={busy}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onRefresh={(id) => {
-          void handleRefresh(id);
-        }}
-        onRemove={(id) => {
-          void handleRemove(id);
-        }}
-      />
-      {selectedRepository ? (
-        <WorktreePanel repository={selectedRepository} busy={busy} />
-      ) : null}
+    <AppShell
+      error={error}
+      topBar={
+        <TopBar
+          appInfo={state.appInfo}
+          view={view}
+          tray={
+            <TrayIndicator
+              counts={trayCounts}
+              canCreateWorktree={selectedRepository !== null}
+              onOpenLauncher={() => setLauncherOpen(true)}
+              onNewWorktree={() => setCreatingIn(selectedRepository)}
+              onOpenSettings={() => setView("settings")}
+            />
+          }
+        />
+      }
+      rail={
+        <L1Rail
+          view={view}
+          onSelectView={setView}
+          repositoriesCollapsed={repositoriesCollapsed}
+          onToggleRepositories={() =>
+            setRepositoriesCollapsed((current) => !current)
+          }
+          onOpenLauncher={() => setLauncherOpen(true)}
+        />
+      }
+      sidebar={
+        <L2RepositoryPanel
+          repositories={state.repositories}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          collapsed={repositoriesCollapsed}
+          onToggleCollapsed={() =>
+            setRepositoriesCollapsed((current) => !current)
+          }
+          index={index}
+          onAddRepository={() => setView("settings")}
+        />
+      }
+      inspector={
+        <InspectorPanel
+          repository={selectedRepository}
+          worktree={selectedWorktree}
+          configuration={state.configuration}
+          agentDefinitions={state.agentDefinitions}
+          collapsed={inspectorCollapsed}
+          onToggleCollapsed={() => setInspectorCollapsed((current) => !current)}
+          onWorktreesChanged={(worktrees) => {
+            if (selectedRepository) {
+              index.setWorktrees(selectedRepository.id, worktrees);
+            }
+          }}
+          onRemoved={() => setSelectedWorktreeId(null)}
+        />
+      }
+      overlays={
+        <>
+          <QuickLaunch
+            open={launcherOpen}
+            onClose={() => setLauncherOpen(false)}
+            repositories={state.repositories}
+            worktrees={index.flat}
+            onOpenRepository={(repository) => {
+              setSelectedId(repository.id);
+              setView("cockpit");
+            }}
+            onOpenWorktree={(worktree, repository) => {
+              selectWorktree(worktree, repository);
+              setView("cockpit");
+            }}
+          />
+          {creatingIn ? (
+            <CreateWorktreeDialog
+              repository={creatingIn}
+              onClose={() => setCreatingIn(null)}
+              onCreated={(worktrees, created) => {
+                index.setWorktrees(creatingIn.id, worktrees);
+                selectWorktree(created, creatingIn);
+              }}
+            />
+          ) : null}
+        </>
+      }
+    >
+      {view === "cockpit" ? (
+        <CockpitView
+          repositories={state.repositories}
+          index={index}
+          configuration={state.configuration}
+          agentDefinitions={state.agentDefinitions}
+          selectedRepositoryId={selectedId}
+          selectedWorktreeId={selectedWorktreeId}
+          onSelectWorktree={selectWorktree}
+          onToggleRepositories={() =>
+            setRepositoriesCollapsed((current) => !current)
+          }
+          onToggleInspector={() => setInspectorCollapsed((current) => !current)}
+          onNewWorktree={() => setCreatingIn(selectedRepository)}
+        />
+      ) : view === "agents" ? (
+        <AgentMonitorView
+          agentDefinitions={state.agentDefinitions}
+          configuration={state.configuration}
+        />
+      ) : (
+        <SettingsView
+          state={state}
+          busy={busy}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onSaveConfiguration={(configuration) => {
+            void handleSaveConfiguration(configuration);
+          }}
+          onImportRepository={(input) => {
+            void handleImportRepository(input);
+          }}
+          onImportRepositories={(paths) => handleImportRepositories(paths)}
+          onRefreshRepository={(id) => {
+            void handleRefreshRepository(id);
+          }}
+          onRemoveRepository={(id) => {
+            void handleRemoveRepository(id);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

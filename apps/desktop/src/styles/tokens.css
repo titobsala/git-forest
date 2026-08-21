@@ -1,0 +1,106 @@
+/*
+ * Git Forest design tokens.
+ *
+ * Source of truth: docs/design.md section 2 (Design Tokens & Color System).
+ * The `:root` block below is the specification verbatim; the `@theme` block
+ * below it exposes those values to Tailwind as utility classes so components
+ * never hardcode a hex value.
+ */
+
+:root {
+  /* Canvas & Layout Stages */
+  --canvas-bg: #eef3f8; /* Main app stage background */
+  --card-bg: #ffffff; /* Container surface & row background */
+  --card-border: #e0e7f0; /* Surface border stroke */
+
+  /* Navigation Hierarchy */
+  --l1-rail-bg: #ffffff; /* Primary icon navigation rail */
+  --l1-icon-inactive: #91a0b2; /* Inactive rail icon color */
+  --l1-divider: #e0e7f0; /* Rail border separator */
+  --l2-panel-bg: #dce5ef; /* Secondary repository list background */
+  --l2-text-active: #0f172a; /* Primary text in sub-panels */
+  --l2-text-muted: #475569; /* Sub-label text in sub-panels */
+  --l2-divider: #c8d5e3; /* Sub-panel internal border divider */
+
+  /* Branding & Accents */
+  --brand-accent: #06b6d4; /* Forest Cyan brand accent */
+
+  /* Typography */
+  --text-primary: #0f172a; /* Slate-900 high contrast primary text */
+  --text-secondary: #475569; /* Slate-600 muted body text */
+
+  /* Telemetry Badges */
+  --badge-high-bg: #ffe4e6; /* Rose-100: Dirty state / warnings */
+  --badge-high-text: #e11d48; /* Rose-600 */
+  --badge-mod-bg: #fef9c3; /* Yellow-100: Stash / moderate warnings */
+  --badge-mod-text: #ca8a04; /* Yellow-700 */
+  --badge-good-bg: #cffafe; /* Cyan-100: Active agent / clean status */
+  --badge-good-text: #0e7490; /* Cyan-700 */
+
+  /* Stage geometry — docs/design.md section 3 */
+  --stage-topbar-h: 40px; /* h-10 */
+  --stage-rail-w: 56px; /* w-14 */
+  --stage-l2-w: 224px; /* w-56 */
+  --stage-inspector-w: 320px; /* w-80 */
+  --stage-collapsed-w: 40px; /* collapsed side panel rail */
+  --row-h: 36px; /* dense worktree row, <= 40px */
+}
+
+@theme {
+  --color-canvas: var(--canvas-bg);
+  --color-card: var(--card-bg);
+  --color-card-border: var(--card-border);
+
+  --color-rail: var(--l1-rail-bg);
+  --color-rail-icon: var(--l1-icon-inactive);
+  --color-rail-divider: var(--l1-divider);
+  --color-l2: var(--l2-panel-bg);
+  --color-l2-active: var(--l2-text-active);
+  --color-l2-muted: var(--l2-text-muted);
+  --color-l2-divider: var(--l2-divider);
+
+  --color-brand: var(--brand-accent);
+
+  --color-ink: var(--text-primary);
+  --color-ink-muted: var(--text-secondary);
+
+  --color-badge-high: var(--badge-high-bg);
+  --color-badge-high-ink: var(--badge-high-text);
+  --color-badge-mod: var(--badge-mod-bg);
+  --color-badge-mod-ink: var(--badge-mod-text);
+  --color-badge-good: var(--badge-good-bg);
+  --color-badge-good-ink: var(--badge-good-text);
+
+  --font-sans:
+    "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  /* Typography scale — docs/design.md section 2.2 */
+  --text-display: 16px;
+  --text-display--line-height: 1.2;
+  --text-display--font-weight: 700;
+
+  --text-heading: 14px;
+  --text-heading--line-height: 1.3;
+  --text-heading--font-weight: 600;
+
+  --text-body: 12px;
+  --text-body--line-height: 1.4;
+  --text-body--font-weight: 500;
+
+  --text-mono-code: 11px;
+  --text-mono-code--line-height: 1.4;
+  --text-mono-code--font-weight: 500;
+
+  --text-micro: 10px;
+  --text-micro--line-height: 1.2;
+  --text-micro--font-weight: 600;
+
+  --spacing-rail: var(--stage-rail-w);
+  --spacing-l2: var(--stage-l2-w);
+  --spacing-inspector: var(--stage-inspector-w);
+  --spacing-collapsed: var(--stage-collapsed-w);
+  --spacing-topbar: var(--stage-topbar-h);
+  --spacing-row: var(--row-h);
+}

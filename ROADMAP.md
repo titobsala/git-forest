@@ -29,6 +29,28 @@ This roadmap deliberately separates **foundational correctness** from richer int
 
 ---
 
+## Deferred UI wiring
+
+The desktop UI was built ahead of the backend against `docs/design.md`. The three interaction surfaces (Quick Launcher, Cockpit, Tray) exist today; the components below are rendered but inert because no command feeds them yet.
+
+They are complete markup and styling. Landing the release listed against each one should be a wiring change, not a design change.
+
+| Component | File | Waiting on |
+| --- | --- | --- |
+| `TerminalActions` (terminal half) | `components/deferred/TerminalActions.tsx` | 0.0.5 — pass an `onOpenTerminal` handler to enable the button |
+| `TerminalActions` (agent half) | `components/deferred/TerminalActions.tsx` | 0.0.6 — pass an `onLaunchAgent` handler |
+| `AgentBadge` | `components/deferred/AgentBadge.tsx` | 0.0.6 / 0.0.8 — pass a real `AgentSession` instead of `null` |
+| Cockpit "Agents" filter pill | `features/cockpit/filters.ts` | 0.0.6 / 0.0.8 — supply the `hasAgentSession` predicate |
+| Agent monitor "Running sessions" | `features/agents/AgentMonitorView.tsx` | 0.0.8 — replace the placeholder with the session list |
+| `TrayPanel` active-agent count | `features/tray/TrayPanel.tsx` | 0.0.8 — replace `counts.agents: null` |
+| `Super + W` global shortcut | `features/launcher/QuickLaunch.tsx` | 0.0.7 — Tauri global-shortcut plugin plus window show/hide; the overlay opens on `Cmd/Ctrl+K` today |
+| Native system tray | `features/tray/TrayPanel.tsx` | 0.5.0 — the panel body becomes the native menu |
+| `StashPill` | `components/deferred/StashPill.tsx` | **unscheduled** — `Worktree` has no `stashCount` and `git/status.rs` does not read the stash reflog. `docs/design.md` section 4.1 specifies the badge; a release needs to claim it |
+
+`selection.open` (`Enter`) and `selection.agent` (`⌥A`) are registered in `lib/keymap.ts` and resolve correctly, but the cockpit's handler ignores them until 0.0.5 and 0.0.6 respectively.
+
+---
+
 # 1. Product Vision
 
 Git Forest is a **keyboard-first desktop control plane for Git worktrees and coding-agent sessions**.
@@ -865,6 +887,8 @@ This release should already be useful even without terminal or agent support.
 
 # Release 0.0.5 — Terminal Provider System
 
+> **UI already built.** The row and inspector actions exist in `components/deferred/TerminalActions.tsx`, rendered disabled. Passing an `onOpenTerminal` handler enables them; no markup change is needed. See "Deferred UI wiring".
+
 ## Goal
 
 Open any worktree instantly in a terminal without coupling Forest to one terminal application.
@@ -944,6 +968,8 @@ If Warp is already in use, Forest opens the workspace as a new tab rather than n
 ---
 
 # Release 0.0.6 — Agent Runner System
+
+> **UI already built.** `components/deferred/AgentBadge.tsx` renders the session pill (pulsing dot, agent name, PID) and returns `null` while no session exists. The agent action in `TerminalActions` and the cockpit "Agents" filter pill activate from the same data. See "Deferred UI wiring".
 
 ## Goal
 
@@ -1053,6 +1079,8 @@ inside any Forest worktree using Warp.
 ---
 
 # Release 0.0.7 — Quick Launcher
+
+> **UI already built.** `features/launcher/QuickLaunch.tsx` implements the overlay, search, ranking (`results.ts`) and keyhints. This release adds the OS-global `Super + W` binding and window show/hide; the overlay currently opens on `Cmd/Ctrl+K` and from the L1 rail. See "Deferred UI wiring".
 
 ## Goal
 
@@ -1401,6 +1429,8 @@ The developer can use Git Forest as part of normal daily development without imm
 
 # Release 0.2.0 — Forest Cockpit
 
+> **UI already built.** The cockpit shipped early against `docs/design.md`: four-tier shell, repository accordions, dense worktree rows with telemetry badges and commit drift, status filter pills, and the inspector panel. What remains for this release is the richer operational content, not the layout.
+
 ## Goal
 
 Add the broader operational view.
@@ -1649,6 +1679,8 @@ A first-time user can install and reach a useful Forest without editing configur
 ---
 
 # Release 0.5.0 — Tray, Background Lifecycle & Startup
+
+> **UI already built.** `features/tray/TrayPanel.tsx` holds the menu body (counts, Quick Launch, New worktree, Settings), shown today as an in-app dropdown from the top bar. This release registers the native tray icon and background lifecycle. See "Deferred UI wiring".
 
 ## Goal
 
