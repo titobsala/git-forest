@@ -572,7 +572,10 @@ default_terminal
 default_agent
 worktree_naming_strategy
 launch_behavior
+theme
 ```
+
+`theme` (`system` | `light` | `dark`) was added in 0.0.4 alongside the neutral dark palette in `docs/design.md` section 8. It is serialized with `#[serde(default)]`, so configurations written before it existed load as `system`; no migration was needed because the configuration is a JSON value in `settings`.
 
 Do not expose every hypothetical future option.
 

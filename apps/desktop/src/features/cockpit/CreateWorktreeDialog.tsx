@@ -111,7 +111,7 @@ export function CreateWorktreeDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 p-4 pt-[14vh] backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-scrim p-4 pt-[14vh] backdrop-blur-sm">
       <div
         role="dialog"
         aria-modal="true"

@@ -12,7 +12,7 @@ pub use app_info::AppInfo;
 pub use error::{CommandError, ForestError};
 pub use forest::{
     ForestConfiguration, ForestPaths, ForestState, LaunchBehavior, TerminalProviderId,
-    WorktreeNamingStrategy,
+    ThemePreference, WorktreeNamingStrategy,
 };
 pub use ids::{AgentDefinitionId, RepositoryId, WorktreeId};
 pub use repository::{Repository, RepositoryMode};

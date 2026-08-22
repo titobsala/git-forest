@@ -17,6 +17,7 @@ import type {
   ImportRepositoriesResult,
   ImportRepositoryInput,
   RepositoryId,
+  ThemePreference,
 } from "../../types/forest";
 
 interface SettingsViewProps {
@@ -25,6 +26,7 @@ interface SettingsViewProps {
   selectedId: RepositoryId | null;
   onSelect: (id: RepositoryId) => void;
   onSaveConfiguration: (configuration: ForestConfiguration) => void;
+  onSelectTheme: (theme: ThemePreference) => void;
   onImportRepository: (input: ImportRepositoryInput) => void;
   onImportRepositories: (paths: string[]) => Promise<ImportRepositoriesResult>;
   onRefreshRepository: (id: RepositoryId) => void;
@@ -37,6 +39,7 @@ export function SettingsView({
   selectedId,
   onSelect,
   onSaveConfiguration,
+  onSelectTheme,
   onImportRepository,
   onImportRepositories,
   onRefreshRepository,
@@ -50,6 +53,7 @@ export function SettingsView({
           state={state}
           busy={busy}
           onSave={onSaveConfiguration}
+          onSelectTheme={onSelectTheme}
         />
         <LinkRepositoryForm busy={busy} onImport={onImportRepository} />
         <ScanRepositoriesPanel busy={busy} onImport={onImportRepositories} />

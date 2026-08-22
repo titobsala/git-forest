@@ -1,14 +1,19 @@
 /**
- * Top OS bar — docs/design.md section 3.1.
+ * Top bar — docs/design.md section 3.1.
  *
- * App identity, version badge, current view badge, and the tray trigger on the
- * right carrying live worktree / background process counts.
+ * This is the window's title bar: the OS decorations are disabled, so the bar
+ * carries the drag region and the window buttons alongside app identity, the
+ * current view and the tray trigger. `data-tauri-drag-region` is Tauri's own
+ * hook — it makes a mousedown start a window drag and a double-click toggle
+ * maximize — and has to sit on every element that should be draggable, since
+ * the event target is what gets checked.
  */
 
 import type { ReactNode } from "react";
 import type { AppInfo } from "../../types/forest";
 import type { ViewId } from "../../app/views";
 import { VIEW_LABELS } from "../../app/views";
+import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
   appInfo: AppInfo;
@@ -19,19 +24,39 @@ interface TopBarProps {
 
 export function TopBar({ appInfo, view, tray }: TopBarProps) {
   return (
-    <header className="flex h-topbar shrink-0 items-center gap-2 border-b border-card-border bg-card px-3">
+    <header
+      data-tauri-drag-region
+      className="flex h-topbar shrink-0 items-center gap-2 border-b border-card-border bg-card pr-1 pl-3"
+    >
       <span
         aria-hidden="true"
-        className="size-2 rounded-full bg-brand"
-        title="Git Forest"
+        className="size-2 shrink-0 rounded-full bg-brand"
       />
-      <h1 className="text-display text-ink">{appInfo.name}</h1>
-      <span className="gf-badge gf-badge-neutral" title="Application version">
+      <h1 data-tauri-drag-region className="text-display text-ink">
+        {appInfo.name}
+      </h1>
+      <span
+        className="shrink-0 font-mono text-micro text-ink-muted"
+        title="Application version"
+      >
         v{appInfo.version}
       </span>
-      <span className="gf-badge gf-badge-good">{VIEW_LABELS[view]}</span>
-      <p className="truncate text-body text-ink-muted">{appInfo.tagline}</p>
-      <div className="ml-auto flex items-center gap-2">{tray}</div>
+      <span className="gf-badge gf-badge-good shrink-0">
+        {VIEW_LABELS[view]}
+      </span>
+      <p
+        data-tauri-drag-region
+        className="truncate text-body text-ink-muted"
+        title={appInfo.tagline}
+      >
+        {appInfo.tagline}
+      </p>
+
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {tray}
+        <span aria-hidden="true" className="h-4 w-px bg-card-border" />
+        <WindowControls />
+      </div>
     </header>
   );
 }

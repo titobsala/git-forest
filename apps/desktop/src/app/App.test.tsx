@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import { getForestState } from "../lib/forest";
+import { getForestState, updateForestConfiguration } from "../lib/forest";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import {
   FALLBACK_FOREST_STATE,
@@ -59,6 +59,10 @@ beforeEach(async () => {
   vi.mocked(scan.listenToScanComplete).mockResolvedValue(() => undefined);
   vi.mocked(listWorktrees).mockResolvedValue([]);
   vi.mocked(refreshWorktrees).mockResolvedValue([]);
+});
+
+afterEach(() => {
+  delete document.documentElement.dataset.theme;
 });
 
 describe("App", () => {
@@ -156,6 +160,35 @@ describe("App", () => {
       expect(
         screen.queryByRole("dialog", { name: "Quick Launch" }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  it("applies and persists a theme picked from the rail", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(updateForestConfiguration).mockResolvedValue({
+      ...nativeState,
+      configuration: { ...nativeState.configuration, theme: "light" },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("navigation", { name: "Primary" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Theme: Match system" }),
+    );
+
+    expect(updateForestConfiguration).toHaveBeenCalledWith({
+      ...nativeState.configuration,
+      theme: "light",
+    });
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
     });
   });
 

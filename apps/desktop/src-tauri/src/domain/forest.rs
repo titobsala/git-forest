@@ -28,6 +28,17 @@ pub enum LaunchBehavior {
     Window,
 }
 
+/// Appearance preference. `System` follows the desktop environment; the other
+/// two pin the palette regardless of what the OS reports.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForestConfiguration {
@@ -36,6 +47,10 @@ pub struct ForestConfiguration {
     pub default_agent_id: AgentDefinitionId,
     pub worktree_naming_strategy: WorktreeNamingStrategy,
     pub launch_behavior: LaunchBehavior,
+    /// Defaulted so configurations persisted before the theme preference
+    /// existed still deserialize; they read back as `System`.
+    #[serde(default)]
+    pub theme: ThemePreference,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,7 +75,10 @@ pub struct ForestState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ForestConfiguration, LaunchBehavior, TerminalProviderId, WorktreeNamingStrategy};
+    use super::{
+        ForestConfiguration, LaunchBehavior, TerminalProviderId, ThemePreference,
+        WorktreeNamingStrategy,
+    };
     use crate::domain::ids::AgentDefinitionId;
     use std::path::PathBuf;
 
@@ -72,6 +90,7 @@ mod tests {
             default_agent_id: AgentDefinitionId::from_string("codex"),
             worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
             launch_behavior: LaunchBehavior::Auto,
+            theme: ThemePreference::Dark,
         };
 
         let json = serde_json::to_value(&configuration).expect("serialize");
@@ -80,5 +99,21 @@ mod tests {
         assert_eq!(json["defaultAgentId"], "codex");
         assert_eq!(json["worktreeNamingStrategy"], "branch_slug");
         assert_eq!(json["launchBehavior"], "auto");
+        assert_eq!(json["theme"], "dark");
+    }
+
+    #[test]
+    fn configuration_persisted_before_themes_deserializes_as_system() {
+        let stored = r#"{
+            "forestRoot": "/home/dev/forest",
+            "defaultTerminal": "warp",
+            "defaultAgentId": "codex",
+            "worktreeNamingStrategy": "branch_slug",
+            "launchBehavior": "auto"
+        }"#;
+
+        let configuration: ForestConfiguration = serde_json::from_str(stored).expect("deserialize");
+
+        assert_eq!(configuration.theme, ThemePreference::System);
     }
 }

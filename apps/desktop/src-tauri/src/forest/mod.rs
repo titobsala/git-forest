@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::domain::{
     AppInfo, ForestConfiguration, ForestError, ForestState, LaunchBehavior, Repository,
-    TerminalProviderId, WorktreeNamingStrategy,
+    TerminalProviderId, ThemePreference, WorktreeNamingStrategy,
 };
 use crate::git::GitRunner;
 use crate::persistence::{
@@ -106,6 +106,7 @@ impl ForestService {
             default_agent_id: crate::domain::AgentDefinitionId::from_string("codex"),
             worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
             launch_behavior: LaunchBehavior::Auto,
+            theme: ThemePreference::System,
         })
     }
 }
@@ -115,7 +116,7 @@ pub(crate) mod tests {
     use super::ForestService;
     use crate::domain::{
         ForestConfiguration, ForestError, LaunchBehavior, RepositoryMode, TerminalProviderId,
-        WorktreeNamingStrategy,
+        ThemePreference, WorktreeNamingStrategy,
     };
     use crate::persistence::Database;
     use crate::platform::PlatformPaths;
@@ -189,10 +190,12 @@ pub(crate) mod tests {
                 default_agent_id: crate::domain::AgentDefinitionId::from_string("claude"),
                 worktree_naming_strategy: WorktreeNamingStrategy::BranchAsIs,
                 launch_behavior: LaunchBehavior::Tab,
+                theme: ThemePreference::Dark,
             })
             .expect("update");
 
         assert_eq!(updated.configuration.forest_root, next_root);
+        assert_eq!(updated.configuration.theme, ThemePreference::Dark);
         assert_eq!(updated.configuration.default_agent_id.as_str(), "claude");
         assert_eq!(
             updated.configuration.worktree_naming_strategy,
@@ -216,6 +219,7 @@ pub(crate) mod tests {
                 default_agent_id: crate::domain::AgentDefinitionId::from_string("codex"),
                 worktree_naming_strategy: WorktreeNamingStrategy::BranchSlug,
                 launch_behavior: LaunchBehavior::Auto,
+                theme: ThemePreference::System,
             })
             .expect_err("unusable root");
 

@@ -2,19 +2,50 @@
  * L1 icon navigation rail — docs/design.md section 3.1.
  *
  * Fixed 56px rail: Cockpit, sidebar collapse toggle, Quick Launch trigger,
- * Agent monitor, Settings.
+ * Agent monitor, then theme and Settings pinned to the bottom.
  */
 
 import type { ReactNode } from "react";
 import { shortcutLabel } from "../../lib/keymap";
 import type { ViewId } from "../../app/views";
+import type { ThemePreference } from "../../types/forest";
 import {
   CockpitIcon,
+  MoonIcon,
   PulseIcon,
   SearchIcon,
   SettingsIcon,
   SidebarIcon,
+  SunIcon,
+  SystemThemeIcon,
 } from "./icons";
+
+/**
+ * The toggle cycles rather than opening a menu: three states are few enough to
+ * step through, and the icon names the state it is in.
+ */
+const THEME_ORDER: ThemePreference[] = ["system", "light", "dark"];
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  system: "Match system",
+  light: "Light",
+  dark: "Dark",
+};
+
+function nextTheme(theme: ThemePreference): ThemePreference {
+  const index = THEME_ORDER.indexOf(theme);
+  return THEME_ORDER[(index + 1) % THEME_ORDER.length] ?? "system";
+}
+
+function ThemeIcon({ theme }: { theme: ThemePreference }) {
+  if (theme === "light") {
+    return <SunIcon />;
+  }
+  if (theme === "dark") {
+    return <MoonIcon />;
+  }
+  return <SystemThemeIcon />;
+}
 
 interface RailButtonProps {
   label: string;
@@ -59,6 +90,9 @@ interface L1RailProps {
   repositoriesCollapsed: boolean;
   onToggleRepositories: () => void;
   onOpenLauncher: () => void;
+  theme: ThemePreference;
+  /** Applies and persists the preference in one step. */
+  onSelectTheme: (theme: ThemePreference) => void;
 }
 
 export function L1Rail({
@@ -67,6 +101,8 @@ export function L1Rail({
   repositoriesCollapsed,
   onToggleRepositories,
   onOpenLauncher,
+  theme,
+  onSelectTheme,
 }: L1RailProps) {
   return (
     <nav
@@ -111,7 +147,15 @@ export function L1Rail({
         <PulseIcon />
       </RailButton>
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col items-center gap-1">
+        <RailButton
+          label={`Theme: ${THEME_LABELS[theme]}`}
+          hint={`switch to ${THEME_LABELS[nextTheme(theme)]}`}
+          onClick={() => onSelectTheme(nextTheme(theme))}
+        >
+          <ThemeIcon theme={theme} />
+        </RailButton>
+
         <RailButton
           label="Settings"
           active={view === "settings"}

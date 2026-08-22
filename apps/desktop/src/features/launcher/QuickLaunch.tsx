@@ -74,7 +74,7 @@ export function QuickLaunch({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 p-4 pt-[12vh] backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-scrim p-4 pt-[12vh] backdrop-blur-sm">
       {/* Real button so dismissing by backdrop is reachable by pointer and by
           assistive technology; Escape closes it too. */}
       <button

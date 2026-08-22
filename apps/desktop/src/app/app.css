@@ -15,7 +15,7 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    /* `color-scheme` is declared per theme in tokens.css. */
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -94,7 +94,7 @@
 }
 
 @utility gf-button-primary {
-  @apply border-brand bg-brand text-white hover:brightness-105 disabled:opacity-50;
+  @apply border-brand-strong bg-brand-strong text-brand-ink hover:brightness-115 disabled:opacity-50;
 }
 
 @utility gf-button-danger {
@@ -174,6 +174,14 @@
     @apply gf-button gf-button-primary;
   }
 
+  /*
+   * Forms are column flexboxes, which stretch their children; without this a
+   * lone submit button spans the whole panel as a wide strip.
+   */
+  .panel .stack > button {
+    @apply self-start;
+  }
+
   .panel button.secondary {
     @apply border-card-border bg-card text-ink hover:border-brand hover:brightness-100;
   }
@@ -192,5 +200,44 @@
 
   .panel .warning-list {
     @apply flex flex-col gap-1 text-body text-badge-mod-ink;
+  }
+
+  /* Repository browser rows. */
+  .panel .repository-list {
+    @apply m-0 flex list-none flex-col gap-2 p-0;
+  }
+
+  .panel .repository-list > li {
+    @apply flex flex-col gap-1.5 rounded-sm border border-card-border p-2;
+  }
+
+  .panel .repository-select {
+    @apply grid w-full grid-cols-[1fr_auto] items-center gap-x-2 gap-y-0.5 rounded-none border-0 border-l-2 border-l-transparent bg-transparent py-0 pr-0 pl-2 text-left text-ink hover:brightness-100;
+  }
+
+  /* Selection is marked by the accent bar and weight, not colour alone. */
+  .panel .repository-select.selected {
+    @apply border-l-brand;
+  }
+
+  .panel .repository-select.selected .repository-name {
+    @apply font-bold;
+  }
+
+  .panel .repository-name {
+    @apply truncate text-heading;
+  }
+
+  .panel .mode-badge {
+    @apply gf-badge gf-badge-neutral justify-self-end;
+  }
+
+  .panel .repository-path,
+  .panel .repository-meta {
+    @apply col-span-2 truncate font-mono text-mono-code text-ink-muted;
+  }
+
+  .panel .confirm-copy {
+    @apply mb-0 basis-full;
   }
 }

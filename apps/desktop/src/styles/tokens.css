@@ -5,6 +5,11 @@
  * The `:root` block below is the specification verbatim; the `@theme` block
  * below it exposes those values to Tailwind as utility classes so components
  * never hardcode a hex value.
+ *
+ * Themes are swapped by re-declaring the same token names under
+ * `:root[data-theme="dark"]`. Every utility resolves through `var()`, so the
+ * whole application repaints from that one attribute and no component needs to
+ * know which theme is active.
  */
 
 :root {
@@ -24,6 +29,8 @@
 
   /* Branding & Accents */
   --brand-accent: #06b6d4; /* Forest Cyan brand accent */
+  --brand-strong: #0e7490; /* Solid brand fill; darkened for text contrast */
+  --brand-ink: #ffffff; /* Text on a solid brand fill */
 
   /* Typography */
   --text-primary: #0f172a; /* Slate-900 high contrast primary text */
@@ -44,6 +51,55 @@
   --stage-inspector-w: 320px; /* w-80 */
   --stage-collapsed-w: 40px; /* collapsed side panel rail */
   --row-h: 36px; /* dense worktree row, <= 40px */
+
+  /* Overlays */
+  --overlay-scrim: rgb(15 23 42 / 0.4); /* Quick Launch / dialog backdrop */
+
+  color-scheme: light;
+}
+
+/*
+ * Neutral dark theme.
+ *
+ * Deliberately achromatic: the greys carry no blue cast, so the cyan accent and
+ * the telemetry badges stay the only saturated colours on screen. Badge fills
+ * become low-luminance tints with light text, keeping the light theme's
+ * severity ordering (rose > yellow > cyan) legible at 10px.
+ */
+:root[data-theme="dark"] {
+  /* Canvas & Layout Stages */
+  --canvas-bg: #131416;
+  --card-bg: #1b1d1f;
+  --card-border: #2e3134;
+
+  /* Navigation Hierarchy */
+  --l1-rail-bg: #1b1d1f;
+  --l1-icon-inactive: #8b9096;
+  --l1-divider: #2e3134;
+  --l2-panel-bg: #17191b;
+  --l2-text-active: #f2f4f6;
+  --l2-text-muted: #a3a9b0;
+  --l2-divider: #2e3134;
+
+  /* Branding & Accents */
+  --brand-accent: #22d3ee; /* Lifted for contrast against the dark canvas */
+
+  /* Typography */
+  --text-primary: #f2f4f6;
+  --text-secondary: #a3a9b0;
+
+  /* Telemetry Badges */
+  --badge-high-bg: #3a1f26;
+  --badge-high-text: #fda4af;
+  --badge-mod-bg: #35301c;
+  --badge-mod-text: #facc15;
+  --badge-good-bg: #123239;
+  --badge-good-text: #67e8f9;
+
+  /* Overlays */
+  --overlay-scrim: rgb(0 0 0 / 0.6);
+
+  color-scheme: dark;
 }
 
 @theme {
@@ -60,6 +116,9 @@
   --color-l2-divider: var(--l2-divider);
 
   --color-brand: var(--brand-accent);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-ink: var(--brand-ink);
+  --color-scrim: var(--overlay-scrim);
 
   --color-ink: var(--text-primary);
   --color-ink-muted: var(--text-secondary);

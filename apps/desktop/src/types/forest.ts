@@ -7,6 +7,8 @@ export type RepositoryMode = "managed" | "linked";
 export type TerminalProviderId = "warp";
 export type WorktreeNamingStrategy = "branch_slug" | "branch_as_is";
 export type LaunchBehavior = "auto" | "tab" | "window";
+/** Appearance preference; "system" follows the desktop environment. */
+export type ThemePreference = "system" | "light" | "dark";
 export type AgentSessionStatus =
   "starting" | "running" | "exited" | "unknown" | "failed";
 
@@ -22,6 +24,7 @@ export interface ForestConfiguration {
   defaultAgentId: AgentDefinitionId;
   worktreeNamingStrategy: WorktreeNamingStrategy;
   launchBehavior: LaunchBehavior;
+  theme: ThemePreference;
 }
 
 export interface ForestPaths {
@@ -205,6 +208,7 @@ export const FALLBACK_FOREST_STATE: ForestState = {
     defaultAgentId: "codex",
     worktreeNamingStrategy: "branch_slug",
     launchBehavior: "auto",
+    theme: "system",
   },
   paths: {
     appDataDir: "/home/user/.local/share/dev.gitforest.desktop",

@@ -12,6 +12,7 @@ import { QuickLaunch } from "../features/launcher/QuickLaunch";
 import { SettingsView } from "../features/settings/SettingsView";
 import { TrayIndicator } from "../features/tray/TrayIndicator";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useTheme } from "../hooks/useTheme";
 import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
@@ -28,6 +29,7 @@ import type {
   ImportRepositoriesResult,
   Repository,
   RepositoryId,
+  ThemePreference,
   Worktree,
   WorktreeId,
 } from "../types/forest";
@@ -53,6 +55,8 @@ export function App() {
   const [creatingIn, setCreatingIn] = useState<Repository | null>(null);
 
   const index = useWorktreeIndex(state.repositories);
+
+  useTheme(state.configuration.theme);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +104,19 @@ export function App() {
 
   async function handleSaveConfiguration(configuration: ForestConfiguration) {
     await runMutation(() => updateForestConfiguration(configuration));
+  }
+
+  /**
+   * The theme applies as soon as it is picked, from the rail or from Settings,
+   * and is persisted in the same step — there is no unsaved theme state.
+   */
+  async function handleSelectTheme(theme: ThemePreference) {
+    if (theme === state.configuration.theme) {
+      return;
+    }
+    await runMutation(() =>
+      updateForestConfiguration({ ...state.configuration, theme }),
+    );
   }
 
   async function handleImportRepository(input: ImportRepositoryInput) {
@@ -199,6 +216,10 @@ export function App() {
             setRepositoriesCollapsed((current) => !current)
           }
           onOpenLauncher={() => setLauncherOpen(true)}
+          theme={state.configuration.theme}
+          onSelectTheme={(theme) => {
+            void handleSelectTheme(theme);
+          }}
         />
       }
       sidebar={
@@ -287,6 +308,9 @@ export function App() {
           onSelect={setSelectedId}
           onSaveConfiguration={(configuration) => {
             void handleSaveConfiguration(configuration);
+          }}
+          onSelectTheme={(theme) => {
+            void handleSelectTheme(theme);
           }}
           onImportRepository={(input) => {
             void handleImportRepository(input);

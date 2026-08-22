@@ -3,6 +3,7 @@ import type {
   ForestConfiguration,
   ForestState,
   LaunchBehavior,
+  ThemePreference,
   WorktreeNamingStrategy,
 } from "../types/forest";
 
@@ -10,12 +11,19 @@ interface ConfigurationPanelProps {
   state: ForestState;
   busy: boolean;
   onSave: (configuration: ForestConfiguration) => void;
+  /**
+   * Theme is applied and persisted the moment it is picked, unlike the rest of
+   * the form, which waits for Save. It is a preview-by-nature setting, and the
+   * same control exists in the navigation rail.
+   */
+  onSelectTheme: (theme: ThemePreference) => void;
 }
 
 export function ConfigurationPanel({
   state,
   busy,
   onSave,
+  onSelectTheme,
 }: ConfigurationPanelProps) {
   const [configuration, setConfiguration] = useState(state.configuration);
 
@@ -112,6 +120,22 @@ export function ConfigurationPanel({
             <option value="auto">Auto</option>
             <option value="tab">Tab</option>
             <option value="window">Window</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Theme</span>
+          <select
+            value={configuration.theme}
+            onChange={(event) => {
+              const theme = event.target.value as ThemePreference;
+              setConfiguration({ ...configuration, theme });
+              onSelectTheme(theme);
+            }}
+          >
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
         </label>
 

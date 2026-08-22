@@ -1,9 +1,10 @@
 /**
  * Minimal stroke icon set for the navigation rail and toolbars.
  *
- * Hand-written rather than pulled from an icon package: the shell needs six
- * glyphs, and AGENTS.md section 36 asks that we not add dependencies for
- * trivial helpers. All icons inherit `currentColor` and a 16px box.
+ * Hand-written rather than pulled from an icon package: the shell needs a
+ * handful of glyphs, and AGENTS.md section 36 asks that we not add
+ * dependencies for trivial helpers. All icons inherit `currentColor` and a
+ * 16px box.
  */
 
 interface IconProps {
@@ -91,6 +92,72 @@ export function ChevronIcon({ className }: IconProps) {
   return (
     <svg {...svgProps(className)}>
       <path d="m6 4 4 4-4 4" />
+    </svg>
+  );
+}
+
+/** Theme: match the desktop environment. */
+export function SystemThemeIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <rect x="1.5" y="3" width="13" height="8.5" rx="1.5" />
+      <path d="M6 14h4" />
+    </svg>
+  );
+}
+
+/** Theme: light. */
+export function SunIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1" />
+    </svg>
+  );
+}
+
+/** Theme: dark. */
+export function MoonIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" />
+    </svg>
+  );
+}
+
+/** Window control: minimize. */
+export function MinimizeIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="M3.5 8h9" />
+    </svg>
+  );
+}
+
+/** Window control: maximize. */
+export function MaximizeIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <rect x="3.5" y="3.5" width="9" height="9" rx="1" />
+    </svg>
+  );
+}
+
+/** Window control: restore down from maximized. */
+export function RestoreIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <rect x="3" y="5.5" width="7.5" height="7" rx="1" />
+      <path d="M5.5 5.5V4.5a1 1 0 0 1 1-1H12a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1h-1" />
+    </svg>
+  );
+}
+
+/** Window control: close. */
+export function CloseIcon({ className }: IconProps) {
+  return (
+    <svg {...svgProps(className)}>
+      <path d="m4 4 8 8M12 4l-8 8" />
     </svg>
   );
 }

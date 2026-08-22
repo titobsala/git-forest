@@ -183,6 +183,59 @@ The desktop UI implements this specification as of release 0.0.4. Deviations, al
 
 **Telemetry with no data source.** Agent session pills, the Warp/Cursor row actions, the stash pill and the tray process count are built to this specification and render inert — empty, or disabled with an explanatory tooltip — rather than showing placeholder values. Each is listed in ROADMAP.md under "Deferred UI wiring" against the release that will feed it. Stash counts are not on the roadmap at all: `Worktree` has no `stashCount` field.
 
-**Theme.** The token set is light-only, as specified. There is no dark palette; `color-scheme` is pinned to `light`.
+**Theme.** The specification's palette is light-only. A neutral dark theme was added on top of it in release 0.0.4 and is documented in section 8; the light tokens are unchanged.
+
+**Brand fills.** Section 2.1 gives one brand colour, `--brand-accent` (#06B6D4). White text on it measures 2.4:1, below the contrast floor in AGENTS.md section 43, so solid brand surfaces (the primary button) use `--brand-strong` (#0E7490, already in the palette as `--badge-good-text`) with `--brand-ink` for the label. `--brand-accent` keeps its role for focus rings, selection bars, dividers and dots, where it is not carrying text.
 
 **Tokens in code.** `apps/desktop/src/styles/tokens.css` carries the section 2.1 `:root` block verbatim as the source of truth, then maps it into Tailwind's `@theme` so components reference utilities (`bg-canvas`, `text-ink-muted`) rather than hex values. Fonts are self-hosted via `@fontsource` packages; the Tauri CSP permits no remote font host.
+
+---
+
+## 8. Neutral Dark Theme
+
+Added in release 0.0.4. Selected in Settings → Configuration → Theme, persisted on `ForestConfiguration.theme` as `system` (the default) | `light` | `dark`.
+
+**Mechanism.** `resolveTheme` maps the preference to a concrete theme — `system` reads `prefers-color-scheme`, which the webview forwards from the desktop environment — and `useTheme` writes it to `data-theme` on the document element. `tokens.css` re-declares the same token names under `:root[data-theme="dark"]`, so every utility repaints from that single attribute and no component knows which theme is active. `main.tsx` applies the system preference before the first paint, so the loading screen does not flash light on a dark desktop.
+
+**Palette.** Deliberately achromatic: the greys carry no blue cast, leaving the cyan accent and the telemetry badges as the only saturated colours on screen.
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--canvas-bg` | `#EEF3F8` | `#131416` |
+| `--card-bg` | `#FFFFFF` | `#1B1D1F` |
+| `--card-border` | `#E0E7F0` | `#2E3134` |
+| `--l1-rail-bg` | `#FFFFFF` | `#1B1D1F` |
+| `--l1-icon-inactive` | `#91A0B2` | `#8B9096` |
+| `--l1-divider` | `#E0E7F0` | `#2E3134` |
+| `--l2-panel-bg` | `#DCE5EF` | `#17191B` |
+| `--l2-text-active` | `#0F172A` | `#F2F4F6` |
+| `--l2-text-muted` | `#475569` | `#A3A9B0` |
+| `--l2-divider` | `#C8D5E3` | `#2E3134` |
+| `--brand-accent` | `#06B6D4` | `#22D3EE` |
+| `--text-primary` | `#0F172A` | `#F2F4F6` |
+| `--text-secondary` | `#475569` | `#A3A9B0` |
+| `--badge-high-bg` / `-text` | `#FFE4E6` / `#E11D48` | `#3A1F26` / `#FDA4AF` |
+| `--badge-mod-bg` / `-text` | `#FEF9C3` / `#CA8A04` | `#35301C` / `#FACC15` |
+| `--badge-good-bg` / `-text` | `#CFFAFE` / `#0E7490` | `#123239` / `#67E8F9` |
+| `--overlay-scrim` | `rgb(15 23 42 / 0.4)` | `rgb(0 0 0 / 0.6)` |
+
+Badge fills become low-luminance tints with light text, preserving the light theme's severity ordering (rose > yellow > cyan). `--brand-strong` and `--brand-ink` are shared by both themes: white on `#0E7490` reads at 4.9:1 against either canvas.
+
+**Window.** The initial window is 1440 × 900 with a 1100 × 640 minimum. The four-tier stage in section 3 needs roughly 1100px before the inspector starts squeezing the central workspace, so the minimum is set at that point rather than left to the platform default.
+
+**Switching.** Both controls persist immediately: the rail button cycles `system → light → dark` and the Settings select writes on change. Theme is the one configuration field that does not wait for **Save configuration** — it is a preview-by-nature setting, and leaving it unsaved would desynchronise the two controls.
+
+---
+
+## 9. Title Bar
+
+The GTK header bar the window manager draws is ~50px tall and duplicates what section 3.1's top bar already shows. `decorations: false` removes it, and the application top bar becomes the title bar:
+
+- `data-tauri-drag-region` on the header, the app name and the tagline makes a drag move the window and a double-click toggle maximize. Tauri checks the *event target*, so the attribute has to be on each element that should be draggable, not just their container.
+- `WindowControls` renders minimize / maximize / close at the right edge, after the tray trigger and a hairline divider. The maximize button tracks `isMaximized` through `onResized`, so double-click-to-maximize keeps the icon honest.
+- `WindowResizeGrips` restores the resize edges. An undecorated GTK window loses the frame the compositor resizes by, so eight 4–8px zones hand the drag back through `startResizeDragging`. They are `aria-hidden` buttons outside the tab order: a pointer-drag affordance has no keyboard equivalent, and window managers already expose resizing to the keyboard.
+- The version moved from a badge to muted micro text — the bar now carries window controls, and the version is fine print, not status.
+
+This needs seven `core:window:*` permissions in `capabilities/default.json`; `core:default` grants only the informational window getters.
+
+**Net effect:** the app went from two stacked bars totalling ~90px to one 40px bar.

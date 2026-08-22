@@ -5,10 +5,12 @@
  *   L1 rail │ L2 repositories │ central workspace │ right inspector
  *
  * Purely structural: every tier is supplied as a slot so the shell has no
- * knowledge of forest state.
+ * knowledge of forest state. The window is undecorated, so the shell also
+ * carries the resize edges the window manager no longer draws.
  */
 
 import type { ReactNode } from "react";
+import { WindowResizeGrips } from "./WindowResizeGrips";
 
 interface AppShellProps {
   topBar: ReactNode;
@@ -51,6 +53,7 @@ export function AppShell({
         {inspector}
       </div>
       {overlays}
+      <WindowResizeGrips />
     </div>
   );
 }
