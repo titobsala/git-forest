@@ -41,7 +41,8 @@ export function ForestStatusPanel({ state }: ForestStatusPanelProps) {
     <section className="panel" aria-labelledby="forest-status-heading">
       <h2 id="forest-status-heading">Forest status</h2>
 
-      <dl className="mb-3 grid grid-cols-3 gap-2">
+      <dl className="mb-3 grid grid-cols-4 gap-2">
+        <StatTile label="Version">v{state.appInfo.version}</StatTile>
         <StatTile label="Repositories">{state.repositories.length}</StatTile>
         <StatTile label="Schema">v{state.schemaVersion}</StatTile>
         <StatTile label="Database">

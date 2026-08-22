@@ -44,10 +44,12 @@ They are complete markup and styling. Landing the release listed against each on
 | Agent monitor "Running sessions" | `features/agents/AgentMonitorView.tsx` | 0.0.8 — replace the placeholder with the session list |
 | `TrayPanel` active-agent count | `features/tray/TrayPanel.tsx` | 0.0.8 — replace `counts.agents: null` |
 | `Super + W` global shortcut | `features/launcher/QuickLaunch.tsx` | 0.0.7 — Tauri global-shortcut plugin plus window show/hide; the overlay opens on `Cmd/Ctrl+K` today |
+| Quick Launch `Open in terminal` | `features/launcher/commands.ts`, `features/launcher/actions.ts` | 0.0.5 — give the `worktree.terminal` command and the `terminal` action a real `run`, and drop `TERMINAL_PENDING` |
+| Quick Launch `Launch agent` | `features/launcher/commands.ts`, `features/launcher/actions.ts` | 0.0.6 — give the `worktree.agent` command and the `agent` action a real `run`, and drop `AGENT_PENDING` |
 | Native system tray | `features/tray/TrayPanel.tsx` | 0.5.0 — the panel body becomes the native menu |
 | `StashPill` | `components/deferred/StashPill.tsx` | **unscheduled** — `Worktree` has no `stashCount` and `git/status.rs` does not read the stash reflog. `docs/design.md` section 4.1 specifies the badge; a release needs to claim it |
 
-`selection.open` (`Enter`) and `selection.agent` (`⌥A`) are registered in `lib/keymap.ts` and resolve correctly, but the cockpit's handler ignores them until 0.0.5 and 0.0.6 respectively.
+`selection.open` (`Enter`) and `selection.agent` (`⌥A`) are registered in `lib/keymap.ts` and resolve correctly, but the cockpit's handler ignores them until 0.0.5 and 0.0.6 respectively. Both appear in Quick Launch as disabled entries naming the release they arrive in, so a search for "terminal" is answered rather than empty.
 
 ---
 

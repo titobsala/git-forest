@@ -95,9 +95,9 @@ describe("App", () => {
       screen.getByRole("listbox", { name: "Worktrees" }),
     ).toBeInTheDocument();
 
-    // Top bar identity and version badge.
+    // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
-    expect(screen.getByText("v0.0.4")).toBeInTheDocument();
+    expect(screen.queryByText("v0.0.4")).not.toBeInTheDocument();
   });
 
   it("groups worktrees under their repository with telemetry badges", async () => {
@@ -163,6 +163,63 @@ describe("App", () => {
     });
   });
 
+  it("runs a command chosen from Quick Launch", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("navigation", { name: "Primary" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Quick Launch" });
+
+    await user.keyboard("settings");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Quick Launch" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("heading", { name: "Forest status" }),
+    ).toBeInTheDocument();
+  });
+
+  it("lands a settings command on the panel it names", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("navigation", { name: "Primary" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Quick Launch" });
+
+    await user.keyboard("link repo");
+    await user.keyboard("{Enter}");
+
+    // Not just "Settings is showing": the command scrolls to and focuses the
+    // panel it names, which is the whole point of it over clicking the gear.
+    const panel = await screen.findByRole("heading", {
+      name: "Link repository",
+    });
+    expect(panel).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Display name (optional)")).toHaveFocus();
+    });
+  });
+
   it("applies and persists a theme picked from the rail", async () => {
     const user = userEvent.setup();
     vi.mocked(getForestState).mockResolvedValue(nativeState);
@@ -206,6 +263,12 @@ describe("App", () => {
       );
     });
 
-    expect(screen.getByText("v0.0.4")).toBeInTheDocument();
+    // The shell still renders around the error rather than blanking out.
+    expect(
+      screen.getByRole("heading", { name: "Git Forest" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Primary" }),
+    ).toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@
 
 export type ShortcutId =
   | "launcher.toggle"
+  | "launcher.actions"
   | "view.cockpit"
   | "overlay.close"
   | "selection.previous"
@@ -50,6 +51,13 @@ export const SHORTCUTS: readonly ShortcutBinding[] = [
     description: "Switch to Cockpit view",
     key: "o",
     mod: true,
+  },
+  {
+    id: "launcher.actions",
+    scope: "overlay",
+    label: "Tab",
+    description: "Show actions for the highlighted result",
+    key: "Tab",
   },
   {
     id: "overlay.close",

@@ -8,12 +8,19 @@ import { AgentMonitorView } from "../features/agents/AgentMonitorView";
 import { CockpitView } from "../features/cockpit/CockpitView";
 import { CreateWorktreeDialog } from "../features/cockpit/CreateWorktreeDialog";
 import { isDirty } from "../features/cockpit/telemetry";
+import type { ActionContext } from "../features/launcher/actions";
+import {
+  buildCommands,
+  type CommandActions,
+  type SettingsFocus,
+} from "../features/launcher/commands";
 import { QuickLaunch } from "../features/launcher/QuickLaunch";
 import { SettingsView } from "../features/settings/SettingsView";
 import { TrayIndicator } from "../features/tray/TrayIndicator";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useTheme } from "../hooks/useTheme";
 import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
+import { clipboardAvailable, copyText } from "../lib/clipboard";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
 import {
@@ -53,6 +60,9 @@ export function App() {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [creatingIn, setCreatingIn] = useState<Repository | null>(null);
+  const [settingsFocus, setSettingsFocus] = useState<SettingsFocus | null>(
+    null,
+  );
 
   const index = useWorktreeIndex(state.repositories);
 
@@ -171,6 +181,75 @@ export function App() {
     );
   }, [index.flat, selectedWorktreeId]);
 
+  /**
+   * Command palette wiring.
+   *
+   * `App` already owns every piece of state the commands mutate, so the
+   * registry is assembled here and the overlay stays presentational. Built
+   * plainly rather than memoised: the arrays are tiny, and `QuickLaunch`
+   * skips all ranking work while it is closed.
+   */
+  const commandActions: CommandActions = {
+    setView,
+    toggleRepositories: () => setRepositoriesCollapsed((current) => !current),
+    toggleInspector: () => setInspectorCollapsed((current) => !current),
+    selectTheme: (theme) => {
+      void handleSelectTheme(theme);
+    },
+    newWorktree: () => setCreatingIn(selectedRepository),
+    refreshRepository: (repository) => {
+      void handleRefreshRepository(repository.id);
+    },
+    openSettings: (focus) => {
+      setView("settings");
+      setSettingsFocus(focus);
+    },
+    revealInspector: () => {
+      setView("cockpit");
+      setInspectorCollapsed(false);
+    },
+  };
+
+  const commands = buildCommands({
+    view,
+    theme: state.configuration.theme,
+    selectedRepository,
+    selectedWorktree,
+    repositoriesCollapsed,
+    inspectorCollapsed,
+    actions: commandActions,
+  });
+
+  function revealResult(repository: Repository, worktree: Worktree | null) {
+    if (worktree) {
+      selectWorktree(worktree, repository);
+    } else {
+      setSelectedId(repository.id);
+    }
+    setView("cockpit");
+  }
+
+  const actionContext: ActionContext = {
+    reveal: (result) => revealResult(result.repository, result.worktree),
+    newWorktree: (repository) => setCreatingIn(repository),
+    refreshRepository: (repository) => {
+      void handleRefreshRepository(repository.id);
+    },
+    copyPath: (path) => {
+      void copyText(path);
+    },
+    removeWorktree: (result) => {
+      revealResult(result.repository, result.worktree);
+      setInspectorCollapsed(false);
+    },
+    removeRepository: (repository) => {
+      setSelectedId(repository.id);
+      setView("settings");
+      setSettingsFocus("repositories");
+    },
+    canCopy: clipboardAvailable(),
+  };
+
   const trayCounts = useMemo(
     () => ({
       worktrees: index.flat.length,
@@ -258,6 +337,8 @@ export function App() {
             onClose={() => setLauncherOpen(false)}
             repositories={state.repositories}
             worktrees={index.flat}
+            commands={commands}
+            actionContext={actionContext}
             onOpenRepository={(repository) => {
               setSelectedId(repository.id);
               setView("cockpit");
@@ -305,6 +386,8 @@ export function App() {
           state={state}
           busy={busy}
           selectedId={selectedId}
+          focus={settingsFocus}
+          onFocusHandled={() => setSettingsFocus(null)}
           onSelect={setSelectedId}
           onSaveConfiguration={(configuration) => {
             void handleSaveConfiguration(configuration);

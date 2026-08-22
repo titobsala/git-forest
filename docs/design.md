@@ -140,9 +140,24 @@ To manage large multi-repository workspaces without clutter:
 
 Triggered via `Super + W` or `Cmd + K`:
 
-- **Backdrop:** Translucent dark overlay (`bg-slate-900/40 backdrop-blur-sm`).
+- **Backdrop:** Translucent overlay (`bg-scrim backdrop-blur-sm`), which follows the theme.
 - **Card:** `max-w-2xl` floating surface with immediate autofocus search input.
-- **Results Row:** Lists matching repositories, branches, and paths with inline keyhints (`↵ Open Cockpit`, `⌥A Launch Agent`, `Esc Close`).
+- **Sections:** Two labelled groups filtered by the one query — **Commands** first, then **Repositories & worktrees**. A group with no matches is not rendered at all.
+- **Footer keyhints:** `↵ Run`, `Tab Actions`, `Esc Close`, plus a result count.
+
+**Commands.** Built by `features/launcher/commands.ts` from a plain context object, so which entries exist and which are disabled is testable without a DOM. `App` supplies the context because it already owns the state the commands mutate; the overlay stays presentational and never knows what a command does.
+
+Before anything is typed, the palette shows the first seven runnable commands — enough to browse, short enough to scan. Typing ranks commands on **title and keywords only**, deliberately not the subtitle: the subtitle holds the selected repository or worktree name, and matching it would rank `Remove worktree… feat/x` above `feat/x` itself for anyone searching a branch.
+
+**Context without a submenu.** Commands that act on a selection carry it in the subtitle (`New worktree… · EXOG App`) and go disabled with a reason (`Select a repository first`) when nothing is selected. That is the flat-list answer to context, and it covers the common case.
+
+**Disabled entries stay findable.** Anything that cannot run — a deferred feature, a command with nothing selected — is dimmed, marked `aria-disabled`, shows its reason as a badge, and is inert on `Enter`. It still matches the query, because a search for "terminal" is better answered with *Release 0.0.5* than with nothing.
+
+**Destructive commands route, they never arm.** `Remove worktree…` reveals the inspector; `Remove repository…` opens the repository browser with the repository selected. The existing inline confirmations are where removal actually happens. A fuzzy-matched palette entry must not put a confirmation one keystroke away (AGENTS.md section 44).
+
+**Action submenu.** `Tab` on a highlighted repository or worktree replaces the list with actions scoped to that item — reveal, copy path, refresh, create, remove, plus the deferred terminal and agent launches. `Shift + Tab`, `ArrowLeft` or `Escape` comes back out, restoring the query that was typed before. The submenu consumes the first `Escape`; only the second closes the overlay.
+
+**Accessibility.** Section headings are `role="presentation"` list items inside the single listbox rather than nested groups, so `aria-activedescendant` keeps working and `ArrowUp`/`ArrowDown` cross a boundary without the user noticing one exists. `Tab` is always swallowed inside the palette: this is a command surface, and focus belongs in the field.
 
 ---
 
@@ -156,6 +171,8 @@ Triggered via `Super + W` or `Cmd + K`:
 | `↑` / `↓` | Cockpit / Quick Launch | Navigate selected worktree node |
 | `Enter` | Selected Worktree | Open worktree in default terminal / editor |
 | `⌥A` | Selected Worktree | Launch configured AI Coding Agent (e.g., Codex / Claude Code) |
+| `Tab` | Quick Launch | Show actions for the highlighted repository or worktree |
+| `Shift + Tab` / `←` | Quick Launch submenu | Return to the main result list |
 | `Tab` | Cockpit | Toggle L2 Repositories sidebar collapse |
 | `Shift + Tab` | Cockpit | Toggle Right Inspector panel collapse |
 
@@ -234,7 +251,7 @@ The GTK header bar the window manager draws is ~50px tall and duplicates what se
 - `data-tauri-drag-region` on the header, the app name and the tagline makes a drag move the window and a double-click toggle maximize. Tauri checks the *event target*, so the attribute has to be on each element that should be draggable, not just their container.
 - `WindowControls` renders minimize / maximize / close at the right edge, after the tray trigger and a hairline divider. The maximize button tracks `isMaximized` through `onResized`, so double-click-to-maximize keeps the icon honest.
 - `WindowResizeGrips` restores the resize edges. An undecorated GTK window loses the frame the compositor resizes by, so eight 4–8px zones hand the drag back through `startResizeDragging`. They are `aria-hidden` buttons outside the tab order: a pointer-drag affordance has no keyboard equivalent, and window managers already expose resizing to the keyboard.
-- The version moved from a badge to muted micro text — the bar now carries window controls, and the version is fine print, not status.
+- The version left the bar entirely and lives in Settings → Forest status. The bar now carries window controls, and a build number is reference material, not something to read at a glance.
 
 This needs seven `core:window:*` permissions in `capabilities/default.json`; `core:default` grants only the informational window getters.
 

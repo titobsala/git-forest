@@ -8,6 +8,7 @@
 import type { Repository, Worktree } from "../../types/forest";
 import type { RepositoryWorktree } from "../../hooks/useWorktreeIndex";
 import { branchLabel } from "../cockpit/telemetry";
+import { score } from "./score";
 
 export type LaunchResultKind = "repository" | "worktree";
 
@@ -23,15 +24,6 @@ export interface LaunchResult {
 }
 
 const MAX_RESULTS = 40;
-
-function score(haystack: string, needle: string): number {
-  const index = haystack.indexOf(needle);
-  if (index === -1) {
-    return -1;
-  }
-  // Prefix matches rank above interior matches; shorter targets win ties.
-  return (index === 0 ? 0 : 100 + index) + haystack.length / 1000;
-}
 
 /**
  * Rank repositories and worktrees against a query.

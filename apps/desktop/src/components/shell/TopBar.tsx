@@ -35,12 +35,6 @@ export function TopBar({ appInfo, view, tray }: TopBarProps) {
       <h1 data-tauri-drag-region className="text-display text-ink">
         {appInfo.name}
       </h1>
-      <span
-        className="shrink-0 font-mono text-micro text-ink-muted"
-        title="Application version"
-      >
-        v{appInfo.version}
-      </span>
       <span className="gf-badge gf-badge-good shrink-0">
         {VIEW_LABELS[view]}
       </span>
