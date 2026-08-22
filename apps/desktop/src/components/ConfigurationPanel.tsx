@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   ForestConfiguration,
   ForestState,
@@ -6,6 +6,26 @@ import type {
   ThemePreference,
   WorktreeNamingStrategy,
 } from "../types/forest";
+
+/**
+ * True when two persisted snapshots differ in nothing but the theme.
+ *
+ * The theme is written the moment it is picked, so it is the one field that
+ * changes underneath an open form. Every other field waits for Save.
+ */
+function themeOnlyChange(
+  previous: ForestConfiguration,
+  next: ForestConfiguration,
+): boolean {
+  return (
+    previous.theme !== next.theme &&
+    previous.forestRoot === next.forestRoot &&
+    previous.defaultTerminal === next.defaultTerminal &&
+    previous.defaultAgentId === next.defaultAgentId &&
+    previous.worktreeNamingStrategy === next.worktreeNamingStrategy &&
+    previous.launchBehavior === next.launchBehavior
+  );
+}
 
 interface ConfigurationPanelProps {
   state: ForestState;
@@ -25,11 +45,25 @@ export function ConfigurationPanel({
   onSave,
   onSelectTheme,
 }: ConfigurationPanelProps) {
-  const [configuration, setConfiguration] = useState(state.configuration);
+  const persisted = state.configuration;
+  const [configuration, setConfiguration] = useState(persisted);
+  const synced = useRef(persisted);
 
+  /**
+   * Re-seed the draft from the persisted configuration — except when the only
+   * thing that moved is the theme. Persisting a theme returns fresh forest
+   * state, and replacing the whole draft there would throw away forest-root,
+   * agent, naming or launch edits the user has not saved yet.
+   */
   useEffect(() => {
-    setConfiguration(state.configuration);
-  }, [state.configuration]);
+    const previous = synced.current;
+    synced.current = persisted;
+    setConfiguration((draft) =>
+      themeOnlyChange(previous, persisted)
+        ? { ...draft, theme: persisted.theme }
+        : persisted,
+    );
+  }, [persisted]);
 
   function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

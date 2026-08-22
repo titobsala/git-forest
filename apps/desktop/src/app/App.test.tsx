@@ -249,6 +249,80 @@ describe("App", () => {
     });
   });
 
+  it("drops the worktree selection when another repository is picked", async () => {
+    const user = userEvent.setup();
+    const ledger = sampleRepository({ id: "repo-2", name: "Ledger" });
+    vi.mocked(getForestState).mockResolvedValue({
+      ...nativeState,
+      repositories: [sampleRepository(), ledger],
+    });
+    vi.mocked(listWorktrees).mockImplementation(async (repositoryId) =>
+      repositoryId === "repo-1"
+        ? [sampleWorktree({ id: "wt-1", branch: "feat/risk-483" })]
+        : [
+            sampleWorktree({
+              id: "wt-2",
+              repositoryId: "repo-2",
+              name: "fix-report-export",
+              branch: "fix/report-export",
+            }),
+          ],
+    );
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("option", { name: /feat/ }));
+
+    const inspector = within(
+      screen.getByRole("complementary", { name: "Worktree inspector" }),
+    );
+    expect(inspector.getByText("EXOG App")).toBeInTheDocument();
+
+    // Moving to another repository must not leave EXOG App's worktree behind:
+    // the inspector would otherwise offer to remove it as if it were Ledger's.
+    await user.click(
+      within(
+        screen.getByRole("complementary", { name: "Repositories" }),
+      ).getByRole("button", { name: /Ledger/ }),
+    );
+
+    await waitFor(() => {
+      expect(
+        inspector.getByText("Select a worktree to inspect its telemetry."),
+      ).toBeInTheDocument();
+    });
+    expect(inspector.queryByText("Ledger")).not.toBeInTheDocument();
+  });
+
+  it("lists repositories one at a time rather than all at once", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    vi.mocked(getForestState).mockResolvedValue({
+      ...nativeState,
+      repositories: [
+        sampleRepository(),
+        sampleRepository({ id: "repo-2", name: "Ledger" }),
+        sampleRepository({ id: "repo-3", name: "Atlas" }),
+      ],
+    });
+    // Each listing holds the single Forest mutex in Rust, so overlapping them
+    // would park a user's next command behind the whole forest.
+    vi.mocked(listWorktrees).mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return [];
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(listWorktrees).toHaveBeenCalledTimes(3);
+    });
+    expect(peak).toBe(1);
+  });
+
   it("shows an error and the fallback snapshot when loading fails", async () => {
     vi.mocked(getForestState).mockRejectedValue({
       code: "database",

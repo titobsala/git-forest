@@ -9,6 +9,14 @@
  *   2. loads a repository on demand when its cockpit group expands;
  *   3. drains the remaining repositories in the background, one at a time,
  *      so the launcher becomes complete without a startup stall.
+ *
+ * Every listing runs behind the single Forest mutex (`commands/mod.rs`), which
+ * makes concurrency here actively harmful: firing one listing per repository
+ * would queue an unrelated configuration save or worktree creation behind a
+ * scan of the entire forest. So listings go through one serial queue —
+ * on-demand requests ahead of background ones — and the background pass waits
+ * for an idle slot and stands down entirely while a native mutation is in
+ * flight. A user command then waits for at most one repository.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +25,14 @@ import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import type { Repository, RepositoryId, Worktree } from "../types/forest";
 
 export type WorktreeIndexStatus = "idle" | "loading" | "ready" | "error";
+
+export interface WorktreeIndexOptions {
+  /**
+   * Suspends the background pass. Set while a native mutation is in flight so
+   * the user's command is not stuck behind a speculative repository scan.
+   */
+  paused?: boolean;
+}
 
 export interface WorktreeIndexEntry {
   status: WorktreeIndexStatus;
@@ -37,12 +53,46 @@ const EMPTY_ENTRY: WorktreeIndexEntry = {
 
 type IndexState = Record<RepositoryId, WorktreeIndexEntry>;
 
-export function useWorktreeIndex(repositories: Repository[]) {
+type LoadMode = "list" | "refresh";
+
+/** A repository waiting for its turn on the shared Forest lock. */
+interface QueuedLoad {
+  id: RepositoryId;
+  mode: LoadMode;
+}
+
+/** Deadline for the idle slot, so the launcher still fills in on a busy tab. */
+const PREFETCH_IDLE_TIMEOUT_MS = 2_000;
+
+/** Fallback spacing where `requestIdleCallback` is missing (jsdom, WebKit). */
+const PREFETCH_FALLBACK_DELAY_MS = 50;
+
+/** Run `task` once the renderer is idle. Returns a cancel function. */
+function scheduleIdle(task: () => void): () => void {
+  if (typeof requestIdleCallback === "function") {
+    const handle = requestIdleCallback(task, {
+      timeout: PREFETCH_IDLE_TIMEOUT_MS,
+    });
+    return () => cancelIdleCallback(handle);
+  }
+  const handle = setTimeout(task, PREFETCH_FALLBACK_DELAY_MS);
+  return () => clearTimeout(handle);
+}
+
+export function useWorktreeIndex(
+  repositories: Repository[],
+  options: WorktreeIndexOptions = {},
+) {
+  const paused = options.paused ?? false;
+
   const [entries, setEntries] = useState<IndexState>({});
 
   // Mirror of the per-repository status, readable synchronously so callbacks
-  // can decide whether to start a load without touching the state updater.
+  // can decide whether to queue a load without touching the state updater.
+  // A repository counts as "loading" from the moment it is queued.
   const statuses = useRef(new Map<RepositoryId, WorktreeIndexStatus>());
+  const queue = useRef<QueuedLoad[]>([]);
+  const running = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -52,13 +102,66 @@ export function useWorktreeIndex(repositories: Repository[]) {
     };
   }, []);
 
-  const load = useCallback(
-    async (id: RepositoryId, mode: "list" | "refresh"): Promise<void> => {
+  const load = useCallback(async ({ id, mode }: QueuedLoad): Promise<void> => {
+    try {
+      const worktrees =
+        mode === "refresh"
+          ? await refreshWorktrees(id)
+          : await listWorktrees(id);
+      statuses.current.set(id, "ready");
+      if (mounted.current) {
+        setEntries((current) => ({
+          ...current,
+          [id]: { status: "ready", worktrees, error: null },
+        }));
+      }
+    } catch (caught: unknown) {
+      statuses.current.set(id, "error");
+      if (mounted.current) {
+        setEntries((current) => ({
+          ...current,
+          [id]: {
+            status: "error",
+            worktrees: current[id]?.worktrees ?? [],
+            error: errorMessage(caught),
+          },
+        }));
+      }
+    }
+  }, []);
+
+  /** Run queued listings one at a time until the queue empties. */
+  const drain = useCallback(async () => {
+    if (running.current) {
+      return;
+    }
+    running.current = true;
+    try {
+      for (;;) {
+        const next = queue.current.shift();
+        if (!next) {
+          return;
+        }
+        await load(next);
+      }
+    } finally {
+      running.current = false;
+    }
+  }, [load]);
+
+  const enqueue = useCallback(
+    (id: RepositoryId, mode: LoadMode, priority: "user" | "background") => {
       if (statuses.current.get(id) === "loading") {
+        // Already queued or in flight. A refresh still upgrades a plain
+        // listing that has not started yet, so the newer intent wins.
+        const queued = queue.current.find((item) => item.id === id);
+        if (queued && mode === "refresh") {
+          queued.mode = "refresh";
+        }
         return;
       }
-      statuses.current.set(id, "loading");
 
+      statuses.current.set(id, "loading");
       setEntries((current) => ({
         ...current,
         [id]: {
@@ -68,33 +171,15 @@ export function useWorktreeIndex(repositories: Repository[]) {
         },
       }));
 
-      try {
-        const worktrees =
-          mode === "refresh"
-            ? await refreshWorktrees(id)
-            : await listWorktrees(id);
-        statuses.current.set(id, "ready");
-        if (mounted.current) {
-          setEntries((current) => ({
-            ...current,
-            [id]: { status: "ready", worktrees, error: null },
-          }));
-        }
-      } catch (caught: unknown) {
-        statuses.current.set(id, "error");
-        if (mounted.current) {
-          setEntries((current) => ({
-            ...current,
-            [id]: {
-              status: "error",
-              worktrees: current[id]?.worktrees ?? [],
-              error: errorMessage(caught),
-            },
-          }));
-        }
+      const item: QueuedLoad = { id, mode };
+      if (priority === "user") {
+        queue.current.unshift(item);
+      } else {
+        queue.current.push(item);
       }
+      void drain();
     },
-    [],
+    [drain],
   );
 
   /** Load a repository's worktrees unless they are already loaded or loading. */
@@ -104,16 +189,16 @@ export function useWorktreeIndex(repositories: Repository[]) {
       if (status !== "idle") {
         return;
       }
-      void load(id, "list");
+      enqueue(id, "list", "user");
     },
-    [load],
+    [enqueue],
   );
 
   const refresh = useCallback(
     (id: RepositoryId) => {
-      void load(id, "refresh");
+      enqueue(id, "refresh", "user");
     },
-    [load],
+    [enqueue],
   );
 
   /** Replace a repository's rows after a create/remove mutation. */
@@ -131,6 +216,7 @@ export function useWorktreeIndex(repositories: Repository[]) {
   /** Forget a repository that left the forest. */
   const forget = useCallback((id: RepositoryId) => {
     statuses.current.delete(id);
+    queue.current = queue.current.filter((item) => item.id !== id);
     setEntries((current) => {
       if (!(id in current)) {
         return current;
@@ -141,18 +227,24 @@ export function useWorktreeIndex(repositories: Repository[]) {
     });
   }, []);
 
-  // Background prefetch: start at most one repository per pass, so the
-  // launcher fills in without competing with whatever the user expands. Each
-  // completed load updates `entries`, which re-runs this effect for the next.
+  // Background pass: queue at most one repository per idle slot, and only once
+  // the queue has drained. Each completed load updates `entries`, which
+  // re-runs this effect for the next repository.
   useEffect(() => {
+    if (paused || queue.current.length > 0 || running.current) {
+      return;
+    }
     const pending = repositories.find(
       (repository) =>
         (statuses.current.get(repository.id) ?? "idle") === "idle",
     );
-    if (pending) {
-      void load(pending.id, "list");
+    if (!pending) {
+      return;
     }
-  }, [repositories, entries, load]);
+    return scheduleIdle(() => {
+      enqueue(pending.id, "list", "background");
+    });
+  }, [repositories, entries, enqueue, paused]);
 
   const entryFor = useCallback(
     (id: RepositoryId): WorktreeIndexEntry => entries[id] ?? EMPTY_ENTRY,

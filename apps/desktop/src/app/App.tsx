@@ -46,6 +46,22 @@ import "./app.css";
 
 type LoadStatus = "loading" | "ready" | "error";
 
+/**
+ * Repository and worktree selection travel together.
+ *
+ * A worktree is only meaningful inside its repository, so the two ids live in
+ * one value instead of two independent states. Held apart, picking another
+ * repository left the previous repository's worktree selected, and the
+ * inspector then showed — and removed — that worktree under the wrong
+ * repository, filing its rows back under the new one.
+ */
+interface Selection {
+  repositoryId: RepositoryId | null;
+  worktreeId: WorktreeId | null;
+}
+
+const EMPTY_SELECTION: Selection = { repositoryId: null, worktreeId: null };
+
 export function App() {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [state, setState] = useState<ForestState>(FALLBACK_FOREST_STATE);
@@ -53,9 +69,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
 
   const [view, setView] = useState<ViewId>("cockpit");
-  const [selectedId, setSelectedId] = useState<RepositoryId | null>(null);
-  const [selectedWorktreeId, setSelectedWorktreeId] =
-    useState<WorktreeId | null>(null);
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  const { repositoryId: selectedId, worktreeId: selectedWorktreeId } =
+    selection;
   const [repositoriesCollapsed, setRepositoriesCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -64,7 +80,7 @@ export function App() {
     null,
   );
 
-  const index = useWorktreeIndex(state.repositories);
+  const index = useWorktreeIndex(state.repositories, { paused: busy });
 
   useTheme(state.configuration.theme);
 
@@ -159,12 +175,26 @@ export function App() {
   async function handleRemoveRepository(id: RepositoryId) {
     await runMutation(() => removeRepository(id));
     index.forget(id);
-    setSelectedId((current) => (current === id ? null : current));
+    setSelection((current) =>
+      current.repositoryId === id ? EMPTY_SELECTION : current,
+    );
+  }
+
+  /** Move to a repository, dropping any worktree that belonged to another. */
+  function selectRepository(id: RepositoryId) {
+    setSelection((current) =>
+      current.repositoryId === id
+        ? current
+        : { repositoryId: id, worktreeId: null },
+    );
   }
 
   function selectWorktree(worktree: Worktree, repository: Repository) {
-    setSelectedId(repository.id);
-    setSelectedWorktreeId(worktree.id);
+    setSelection({ repositoryId: repository.id, worktreeId: worktree.id });
+  }
+
+  function clearWorktreeSelection() {
+    setSelection((current) => ({ ...current, worktreeId: null }));
   }
 
   const selectedRepository =
@@ -172,14 +202,17 @@ export function App() {
     null;
 
   const selectedWorktree = useMemo(() => {
-    if (!selectedWorktreeId) {
+    if (!selectedId || !selectedWorktreeId) {
       return null;
     }
     return (
-      index.flat.find((row) => row.worktree.id === selectedWorktreeId)
-        ?.worktree ?? null
+      index.flat.find(
+        (row) =>
+          row.repository.id === selectedId &&
+          row.worktree.id === selectedWorktreeId,
+      )?.worktree ?? null
     );
-  }, [index.flat, selectedWorktreeId]);
+  }, [index.flat, selectedId, selectedWorktreeId]);
 
   /**
    * Command palette wiring.
@@ -224,7 +257,7 @@ export function App() {
     if (worktree) {
       selectWorktree(worktree, repository);
     } else {
-      setSelectedId(repository.id);
+      selectRepository(repository.id);
     }
     setView("cockpit");
   }
@@ -243,7 +276,7 @@ export function App() {
       setInspectorCollapsed(false);
     },
     removeRepository: (repository) => {
-      setSelectedId(repository.id);
+      selectRepository(repository.id);
       setView("settings");
       setSettingsFocus("repositories");
     },
@@ -305,7 +338,7 @@ export function App() {
         <L2RepositoryPanel
           repositories={state.repositories}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={selectRepository}
           collapsed={repositoriesCollapsed}
           onToggleCollapsed={() =>
             setRepositoriesCollapsed((current) => !current)
@@ -327,7 +360,7 @@ export function App() {
               index.setWorktrees(selectedRepository.id, worktrees);
             }
           }}
-          onRemoved={() => setSelectedWorktreeId(null)}
+          onRemoved={clearWorktreeSelection}
         />
       }
       overlays={
@@ -340,7 +373,7 @@ export function App() {
             commands={commands}
             actionContext={actionContext}
             onOpenRepository={(repository) => {
-              setSelectedId(repository.id);
+              selectRepository(repository.id);
               setView("cockpit");
             }}
             onOpenWorktree={(worktree, repository) => {
@@ -388,7 +421,7 @@ export function App() {
           selectedId={selectedId}
           focus={settingsFocus}
           onFocusHandled={() => setSettingsFocus(null)}
-          onSelect={setSelectedId}
+          onSelect={selectRepository}
           onSaveConfiguration={(configuration) => {
             void handleSaveConfiguration(configuration);
           }}
