@@ -6,7 +6,7 @@
  * blocker/force confirmation flow required by AGENTS.md section 44).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../lib/errors";
 import { getWorktreeRemovalPreview, removeWorktree } from "../../lib/worktrees";
 import type {
@@ -14,6 +14,7 @@ import type {
   AgentDefinition,
   Repository,
   Worktree,
+  WorktreeId,
   WorktreeRemovalPreview,
 } from "../../types/forest";
 import { AgentBadge } from "../deferred/AgentBadge";
@@ -62,10 +63,21 @@ export function InspectorPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * The worktree every in-flight request was issued for.
+   *
+   * Preview and removal are slow enough for the selection to move on before
+   * they answer. A late answer belongs to the worktree that was selected when
+   * it was asked for, never to whatever is selected when it arrives.
+   */
+  const requestedFor = useRef<WorktreeId | null>(null);
+
   // Any change of selection invalidates a pending destructive confirmation.
   useEffect(() => {
+    requestedFor.current = worktree?.id ?? null;
     setPreview(null);
     setError(null);
+    setBusy(false);
   }, [worktree?.id]);
 
   if (collapsed) {
@@ -96,14 +108,24 @@ export function InspectorPanel({
     if (!worktree) {
       return;
     }
+    const requested = worktree.id;
     setError(null);
     setBusy(true);
     try {
-      setPreview(await getWorktreeRemovalPreview(worktree.id));
+      const result = await getWorktreeRemovalPreview(requested);
+      if (requestedFor.current !== requested) {
+        return;
+      }
+      setPreview(result);
     } catch (caught: unknown) {
+      if (requestedFor.current !== requested) {
+        return;
+      }
       setError(errorMessage(caught));
     } finally {
-      setBusy(false);
+      if (requestedFor.current === requested) {
+        setBusy(false);
+      }
     }
   }
 
@@ -111,10 +133,14 @@ export function InspectorPanel({
     if (!preview) {
       return;
     }
+    const requested = preview.worktree.id;
     setError(null);
     setBusy(true);
     try {
-      const result = await removeWorktree(preview.worktree.id, force);
+      const result = await removeWorktree(requested, force);
+      if (requestedFor.current !== requested) {
+        return;
+      }
       onWorktreesChanged(result.worktrees);
       if (result.removed) {
         setPreview(null);
@@ -128,9 +154,14 @@ export function InspectorPanel({
         });
       }
     } catch (caught: unknown) {
+      if (requestedFor.current !== requested) {
+        return;
+      }
       setError(errorMessage(caught));
     } finally {
-      setBusy(false);
+      if (requestedFor.current === requested) {
+        setBusy(false);
+      }
     }
   }
 
