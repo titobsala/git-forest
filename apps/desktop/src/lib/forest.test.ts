@@ -19,6 +19,7 @@ const sampleState: ForestState = {
     defaultAgentId: "codex",
     worktreeNamingStrategy: "branch_slug",
     launchBehavior: "auto",
+    theme: "system",
   },
   paths: {
     appDataDir: "/tmp/app-data",

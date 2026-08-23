@@ -14,9 +14,12 @@
       {
         "label": "main",
         "title": "Git Forest",
-        "width": 960,
-        "height": 920,
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 640,
         "resizable": true,
+        "decorations": false,
         "center": true
       }
     ],
