@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn opens_a_present_worktree_in_warp() {
         let env = TempEnv::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let (service, repository) = imported_repo(&env, warp(launcher.clone(), &env));
         let created = service
             .create_worktree(CreateWorktreeInput {
@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn missing_worktree_directory_is_not_opened() {
         let env = TempEnv::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let (service, repository) = imported_repo(&env, warp(launcher.clone(), &env));
         let created = service
             .create_worktree(CreateWorktreeInput {
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn a_broken_sibling_worktree_does_not_block_opening_a_healthy_one() {
         let env = TempEnv::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let (service, repository) = imported_repo(&env, warp(launcher.clone(), &env));
         let created = service
             .create_worktree(CreateWorktreeInput {
@@ -145,10 +145,8 @@ mod tests {
     #[test]
     fn unknown_worktree_is_not_found() {
         let env = TempEnv::new();
-        let (service, _repository) = imported_repo(
-            &env,
-            warp(FakeDesktopLauncher::with_binary("warp-terminal"), &env),
-        );
+        let (service, _repository) =
+            imported_repo(&env, warp(FakeDesktopLauncher::with_scheme("warp"), &env));
         let error = service
             .open_worktree(crate::domain::WorktreeId::from_string("missing"))
             .expect_err("unknown");
@@ -158,7 +156,7 @@ mod tests {
     #[test]
     fn window_launch_behavior_opens_a_new_window_uri() {
         let env = TempEnv::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let (service, repository) = imported_repo(&env, warp(launcher.clone(), &env));
         let created = service
             .create_worktree(CreateWorktreeInput {

@@ -453,6 +453,25 @@ describe("App", () => {
     expect(launchAgent).toHaveBeenCalledWith("wt-1");
   });
 
+  it("keeps Enter on a focused agent button from opening the terminal", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    cockpit.getByRole("button", { name: "Launch Codex" }).focus();
+    await user.keyboard("{Enter}");
+
+    expect(launchAgent).toHaveBeenCalledWith("wt-1");
+    expect(openWorktreeInTerminal).not.toHaveBeenCalled();
+  });
+
   it("shows a typed agent error instead of failing silently", async () => {
     const user = userEvent.setup();
     vi.mocked(getForestState).mockResolvedValue(nativeState);

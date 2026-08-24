@@ -12,7 +12,6 @@ use super::provider::TerminalProvider;
 
 const AVAILABILITY_TTL: Duration = Duration::from_secs(30);
 const TAB_CONFIG_TTL: Duration = Duration::from_secs(60);
-const WARP_BINARIES: &[&str] = &["warp-terminal", "warp"];
 const WARP_SCHEME: &str = "warp";
 const TAB_CONFIG_PREFIX: &str = "git-forest-";
 
@@ -55,16 +54,11 @@ impl WarpProvider {
         }
     }
 
-    /// Warp is only usable when it is installed *and* the launcher can hand a
-    /// `warp://` URI to the desktop. Every launch goes through the URI opener,
-    /// so reporting an installed Warp as available without it would turn a
-    /// detectable gap into a failure at launch time.
+    /// Every launch dispatches a `warp://` URI. A binary on PATH without a
+    /// registered handler is not a usable provider, so availability tracks the
+    /// scheme plus a working URI opener.
     fn detect(&self) -> bool {
-        let installed = WARP_BINARIES
-            .iter()
-            .any(|binary| self.launcher.executable_on_path(binary))
-            || self.launcher.uri_scheme_registered(WARP_SCHEME);
-        installed && self.launcher.can_open_uris()
+        self.launcher.uri_scheme_registered(WARP_SCHEME) && self.launcher.can_open_uris()
     }
 
     fn prune_tab_configs(&self) -> Result<(), ForestError> {
@@ -289,17 +283,17 @@ mod tests {
     }
 
     #[test]
-    fn detects_warp_from_a_path_binary_or_registered_uri_handler() {
+    fn detects_warp_from_a_registered_uri_handler() {
         let env = crate::git::testing::TempGit::new();
         let from_binary = available_provider(
             FakeDesktopLauncher::with_binary("warp-terminal"),
             env.path("tabs"),
         );
-        assert!(from_binary.is_available().expect("binary"));
+        assert!(!from_binary.is_available().expect("binary"));
 
         let from_alias =
             available_provider(FakeDesktopLauncher::with_binary("warp"), env.path("tabs"));
-        assert!(from_alias.is_available().expect("alias"));
+        assert!(!from_alias.is_available().expect("alias"));
 
         let from_scheme =
             available_provider(FakeDesktopLauncher::with_scheme("warp"), env.path("tabs"));
@@ -313,7 +307,7 @@ mod tests {
     fn an_installed_warp_without_a_uri_opener_is_unavailable() {
         let env = crate::git::testing::TempGit::new();
         let provider = available_provider(
-            FakeDesktopLauncher::with_binary("warp-terminal").without_uri_opener(),
+            FakeDesktopLauncher::with_scheme("warp").without_uri_opener(),
             env.path("tabs"),
         );
         assert!(!provider.is_available().expect("no opener"));
@@ -343,30 +337,30 @@ mod tests {
     #[test]
     fn caches_availability_within_the_ttl() {
         let env = crate::git::testing::TempGit::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider = available_provider(launcher.clone(), env.path("tabs"));
 
         assert!(provider.is_available().expect("first"));
         assert!(provider.is_available().expect("second"));
-        assert_eq!(launcher.path_check_count(), 1);
+        assert_eq!(launcher.scheme_check_count(), 1);
     }
 
     #[test]
     fn zero_ttl_rechecks_availability_on_every_call() {
         let env = crate::git::testing::TempGit::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider =
             WarpProvider::new(Box::new(launcher.clone()), Duration::ZERO, env.path("tabs"));
 
         assert!(provider.is_available().expect("first"));
         assert!(provider.is_available().expect("second"));
-        assert_eq!(launcher.path_check_count(), 2);
+        assert_eq!(launcher.scheme_check_count(), 2);
     }
 
     #[test]
     fn opens_an_existing_directory_through_the_uri_launcher() {
         let env = crate::git::testing::TempGit::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider = available_provider(launcher.clone(), env.path("tabs"));
 
         let result = provider
@@ -399,7 +393,7 @@ mod tests {
     #[test]
     fn launch_failures_are_surfaced() {
         let env = crate::git::testing::TempGit::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal").fail_open("cannot open");
+        let launcher = FakeDesktopLauncher::with_scheme("warp").fail_open("cannot open");
         let provider = available_provider(launcher, env.path("tabs"));
         let error = provider
             .open_directory(env.root(), LaunchBehavior::Window)
@@ -413,7 +407,7 @@ mod tests {
     fn launch_command_writes_a_prefixed_tab_config_and_opens_it() {
         let env = crate::git::testing::TempGit::new();
         let tabs = env.path("tabs");
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider = available_provider(launcher.clone(), tabs.clone());
 
         provider
@@ -447,7 +441,7 @@ mod tests {
     #[test]
     fn window_behavior_opens_a_tab_config_in_a_new_window() {
         let env = crate::git::testing::TempGit::new();
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider = available_provider(launcher.clone(), env.path("tabs"));
         provider
             .launch_command(&spec(env.root(), "claude"), LaunchBehavior::Window)
@@ -462,7 +456,7 @@ mod tests {
         fs::create_dir_all(&tabs).expect("tabs");
         fs::write(tabs.join("git-forest-old.toml"), "stale\n").expect("stale");
         fs::write(tabs.join("my-user-tab.toml"), "keep\n").expect("user");
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
         let provider = WarpProvider::new_with_tab_ttl(
             Box::new(launcher),
             Duration::from_secs(30),
@@ -495,7 +489,7 @@ mod tests {
     fn failed_agent_launch_does_not_leave_a_tab_config() {
         let env = crate::git::testing::TempGit::new();
         let tabs = env.path("tabs");
-        let launcher = FakeDesktopLauncher::with_binary("warp-terminal").fail_open("no warp");
+        let launcher = FakeDesktopLauncher::with_scheme("warp").fail_open("no warp");
         let provider = available_provider(launcher, tabs.clone());
         provider
             .launch_command(&spec(env.root(), "codex"), LaunchBehavior::Auto)

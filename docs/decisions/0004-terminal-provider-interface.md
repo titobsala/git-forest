@@ -25,7 +25,7 @@ Forest validates the worktree (it must exist on disk) and then calls the configu
 
 The first implementation is Warp on Linux:
 
-- Availability is true when `warp-terminal` or `warp` is on `PATH`, or the `warp` URI scheme is registered. The result is cached for 30 seconds so the launcher does not re-detect on every open.
+- Availability is true when the `warp` URI scheme is registered **and** a URI opener (`xdg-open`) is present. A Warp binary on `PATH` is not enough: every launch dispatches a `warp://` URI, so a binary-only install has no verified route. The result is cached for 30 seconds so the launcher does not re-detect on every open.
 - `Auto` and `Tab` open `warp://action/new_tab?path=...` with a percent-encoded path. `Window` uses `new_window`.
 - Desktop URIs are opened through `xdg-open` as an argv array, never a concatenated shell string.
 

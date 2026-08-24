@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isTextEntryTarget, resolveShortcut, shortcutLabel } from "./keymap";
+import {
+  isInteractiveTarget,
+  isTextEntryTarget,
+  resolveShortcut,
+  shortcutLabel,
+} from "./keymap";
 
 function event(overrides: Partial<KeyboardEvent> & { key: string }) {
   return {
@@ -58,6 +63,18 @@ describe("resolveShortcut", () => {
 describe("shortcutLabel", () => {
   it("returns the display form", () => {
     expect(shortcutLabel("launcher.toggle")).toBe("Cmd K");
+  });
+});
+
+describe("isInteractiveTarget", () => {
+  it("treats nested buttons as owning their keys", () => {
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    button.append(label);
+
+    expect(isInteractiveTarget(button)).toBe(true);
+    expect(isInteractiveTarget(label)).toBe(true);
+    expect(isInteractiveTarget(document.createElement("div"))).toBe(false);
   });
 });
 

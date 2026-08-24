@@ -108,7 +108,7 @@ struct FakeInner {
     binaries: Mutex<Vec<String>>,
     schemes: Mutex<Vec<String>>,
     opened: Mutex<Vec<String>>,
-    path_checks: Mutex<Vec<String>>,
+    scheme_checks: Mutex<Vec<String>>,
     open_error: Mutex<Option<String>>,
     uri_opener_missing: Mutex<bool>,
 }
@@ -131,14 +131,16 @@ impl FakeDesktopLauncher {
     }
 
     pub fn with_scheme(scheme: &str) -> Self {
-        let launcher = Self::default();
-        launcher
-            .inner
+        Self::default().and_scheme(scheme)
+    }
+
+    pub fn and_scheme(self, scheme: &str) -> Self {
+        self.inner
             .schemes
             .lock()
             .expect("schemes")
             .push(scheme.to_owned());
-        launcher
+        self
     }
 
     /// Simulate a desktop with no URI opener installed.
@@ -156,19 +158,18 @@ impl FakeDesktopLauncher {
         self.inner.opened.lock().expect("opened").clone()
     }
 
-    pub fn path_check_count(&self) -> usize {
-        self.inner.path_checks.lock().expect("path checks").len()
+    pub fn scheme_check_count(&self) -> usize {
+        self.inner
+            .scheme_checks
+            .lock()
+            .expect("scheme checks")
+            .len()
     }
 }
 
 #[cfg(test)]
 impl DesktopLauncher for FakeDesktopLauncher {
     fn executable_on_path(&self, name: &str) -> bool {
-        self.inner
-            .path_checks
-            .lock()
-            .expect("path checks")
-            .push(name.to_owned());
         self.inner
             .binaries
             .lock()
@@ -178,6 +179,11 @@ impl DesktopLauncher for FakeDesktopLauncher {
     }
 
     fn uri_scheme_registered(&self, scheme: &str) -> bool {
+        self.inner
+            .scheme_checks
+            .lock()
+            .expect("scheme checks")
+            .push(scheme.to_owned());
         self.inner
             .schemes
             .lock()

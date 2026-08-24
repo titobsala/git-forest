@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { resolveShortcut } from "../../lib/keymap";
+import { isInteractiveTarget, resolveShortcut } from "../../lib/keymap";
 import type {
   AgentDefinition,
   ForestConfiguration,
@@ -136,6 +136,10 @@ export function CockpitView({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (isInteractiveTarget(event.target)) {
+      return;
+    }
+
     const id = resolveShortcut(event, ["cockpitList"]);
     if (!id) {
       return;

@@ -44,6 +44,7 @@ export function TerminalActions({
         className="gf-button px-1.5 py-0.5 text-micro"
         disabled={!onOpenTerminal}
         onClick={handleOpenTerminal}
+        onKeyDown={(event) => event.stopPropagation()}
         title={
           onOpenTerminal
             ? `Open in ${terminalName} (${shortcutLabel("selection.open")})`
@@ -59,6 +60,7 @@ export function TerminalActions({
         className="gf-button px-1.5 py-0.5 text-micro"
         disabled={!onLaunchAgent}
         onClick={handleLaunchAgent}
+        onKeyDown={(event) => event.stopPropagation()}
         title={
           onLaunchAgent
             ? `Launch ${agentName} (${shortcutLabel("selection.agent")})`

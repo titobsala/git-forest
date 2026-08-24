@@ -92,7 +92,8 @@ mod tests {
     fn launches_the_default_agent_in_the_selected_worktree() {
         let env = TempEnv::new();
         let launcher =
-            FakeDesktopLauncher::with_binaries(&["warp-terminal", "codex", "claude", "opencode"]);
+            FakeDesktopLauncher::with_binaries(&["warp-terminal", "codex", "claude", "opencode"])
+                .and_scheme("warp");
         let (service, repository) = imported_repo(&env, launcher.clone());
         let created = service
             .create_worktree(CreateWorktreeInput {
@@ -118,7 +119,8 @@ mod tests {
     fn launches_each_required_builtin_agent() {
         let env = TempEnv::new();
         let launcher =
-            FakeDesktopLauncher::with_binaries(&["warp-terminal", "codex", "claude", "opencode"]);
+            FakeDesktopLauncher::with_binaries(&["warp-terminal", "codex", "claude", "opencode"])
+                .and_scheme("warp");
         let (service, repository) = imported_repo(&env, launcher);
         let created = service
             .create_worktree(CreateWorktreeInput {
