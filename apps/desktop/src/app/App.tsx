@@ -23,6 +23,8 @@ import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
 import { clipboardAvailable, copyText } from "../lib/clipboard";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
+import { openWorktreeInTerminal } from "../lib/terminals";
+import { launchAgent } from "../lib/agents";
 import {
   importRepositories,
   importRepository,
@@ -197,6 +199,24 @@ export function App() {
     setSelection((current) => ({ ...current, worktreeId: null }));
   }
 
+  async function handleOpenTerminal(worktree: Worktree) {
+    try {
+      await openWorktreeInTerminal(worktree.id);
+      setError(null);
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function handleLaunchAgent(worktree: Worktree) {
+    try {
+      await launchAgent(worktree.id);
+      setError(null);
+    } catch (caught: unknown) {
+      setError(errorMessage(caught));
+    }
+  }
+
   const selectedRepository =
     state.repositories.find((repository) => repository.id === selectedId) ??
     null;
@@ -241,6 +261,12 @@ export function App() {
       setView("cockpit");
       setInspectorCollapsed(false);
     },
+    openTerminal: (worktree) => {
+      void handleOpenTerminal(worktree);
+    },
+    launchAgent: (worktree) => {
+      void handleLaunchAgent(worktree);
+    },
   };
 
   const commands = buildCommands({
@@ -281,13 +307,19 @@ export function App() {
       setSettingsFocus("repositories");
     },
     canCopy: clipboardAvailable(),
+    openTerminal: (worktree) => {
+      void handleOpenTerminal(worktree);
+    },
+    launchAgent: (worktree) => {
+      void handleLaunchAgent(worktree);
+    },
   };
 
   const trayCounts = useMemo(
     () => ({
       worktrees: index.flat.length,
       dirty: index.flat.filter((row) => isDirty(row.worktree)).length,
-      // Awaiting agent session tracking (releases 0.0.6 / 0.0.8).
+      // Live agent sessions arrive in release 0.0.8.
       agents: null,
     }),
     [index.flat],
@@ -361,6 +393,12 @@ export function App() {
             }
           }}
           onRemoved={clearWorktreeSelection}
+          onOpenTerminal={(worktree) => {
+            void handleOpenTerminal(worktree);
+          }}
+          onLaunchAgent={(worktree) => {
+            void handleLaunchAgent(worktree);
+          }}
         />
       }
       overlays={
@@ -408,6 +446,12 @@ export function App() {
           }
           onToggleInspector={() => setInspectorCollapsed((current) => !current)}
           onNewWorktree={() => setCreatingIn(selectedRepository)}
+          onOpenTerminal={(worktree) => {
+            void handleOpenTerminal(worktree);
+          }}
+          onLaunchAgent={(worktree) => {
+            void handleLaunchAgent(worktree);
+          }}
         />
       ) : view === "agents" ? (
         <AgentMonitorView

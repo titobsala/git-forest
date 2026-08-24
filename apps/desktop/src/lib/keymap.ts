@@ -180,3 +180,19 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 
   return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
+
+/**
+ * True when a nested control should keep the key instead of a list shortcut.
+ *
+ * Cockpit row actions are buttons inside the listbox. Enter on a focused
+ * Launch button must activate that button, not `selection.open`.
+ */
+export function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (isTextEntryTarget(target)) {
+    return true;
+  }
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest("button, a, [href], [role='button']"));
+}

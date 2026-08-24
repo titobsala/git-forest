@@ -4,11 +4,11 @@ Keyboard-first desktop control plane for Git worktrees and coding-agent sessions
 
 Git Forest is **not** a full Git client, IDE, or terminal. It connects repositories, worktrees, terminals, and CLI coding agents so a developer can move between isolated workspaces quickly.
 
-This repository is at **Release 0.0.4** — a runnable Linux desktop app that can index local Git repositories, scan folders, and create, inspect, and safely remove Git worktrees. Terminals and coding agents start in later roadmap releases.
+This repository is at **Release 0.0.6** — a runnable Linux desktop app that can index local Git repositories, scan folders, create, inspect, and safely remove Git worktrees, open a worktree in Warp, and launch Codex, Claude Code, or OpenCode in that worktree.
 
 ## Prerequisites
 
-The 0.0.4 desktop app targets **Linux** first.
+The 0.0.6 desktop app targets **Linux** first.
 
 You need:
 
@@ -55,7 +55,7 @@ That opens the Git Forest window:
 ```text
 Git Forest
 
-Version 0.0.4
+Version 0.0.6
 
 Worktrees in reach.
 ```
@@ -66,7 +66,9 @@ The window shows Forest status and configuration, then lets you:
 - scan a folder with live progress and cancellation, then import selected candidates;
 - search indexed repositories by name, path, branch, or remote;
 - refresh Git metadata and remove a repository from the Forest index only;
-- select a repository to list worktrees, create a new-branch worktree, and remove one after a safety preview.
+- select a repository to list worktrees, create a new-branch worktree, and remove one after a safety preview;
+- open a selected worktree in Warp (new tab by default, or a new window from Settings);
+- launch the configured default agent (Codex, Claude Code, or OpenCode) in that worktree.
 
 Restarting the app keeps that index. Schema version 2 adds repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`) without dropping 0.0.2 rows.
 
@@ -77,7 +79,8 @@ Limitations in this release:
 - new imports are Linked only (existing Managed records still load);
 - worktree creation always makes a new branch from a local base (no attach-existing-branch yet);
 - primary, locked, missing, and Git-unknown worktrees cannot be removed;
-- terminals and agents are not launched yet.
+- Warp is the only terminal provider;
+- custom-agent management and live agent session tracking are not implemented yet.
 
 The desktop capability set is `core:default` plus `dialog:allow-open` for native directory pickers. The UI never receives a generic shell command.
 
@@ -93,6 +96,8 @@ After `bun run dev`:
 4. Remove a repository from Forest and confirm the directory is still on disk.
 5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>-<repository-id>/`.
 6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists.
+7. With Warp installed, open a worktree from the cockpit (`Enter` or the row action) and confirm a tab opens at that path.
+8. With Codex, Claude Code, or OpenCode on `PATH`, launch the default agent (`⌥A` or the row action) and confirm Warp starts that command in the worktree. Settings should show Installed/Missing next to each built-in.
 
 ## Commands
 

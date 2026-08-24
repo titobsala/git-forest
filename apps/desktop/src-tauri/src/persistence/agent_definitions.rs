@@ -66,3 +66,25 @@ pub fn agent_exists(conn: &Connection, id: &str) -> Result<bool, ForestError> {
     )?;
     Ok(count > 0)
 }
+
+pub fn get_agent_definition(
+    conn: &Connection,
+    id: &str,
+) -> Result<Option<AgentDefinition>, ForestError> {
+    let mut statement = conn.prepare(
+        "SELECT id, name, command, args_json, is_builtin
+         FROM agent_definitions
+         WHERE id = ?1",
+    )?;
+    let mut rows = statement.query(params![id])?;
+    let Some(row) = rows.next()? else {
+        return Ok(None);
+    };
+    Ok(Some(AgentDefinition {
+        id: AgentDefinitionId::from_string(row.get::<_, String>(0)?),
+        name: row.get(1)?,
+        command: row.get(2)?,
+        args: serde_json::from_str(&row.get::<_, String>(3)?)?,
+        is_builtin: row.get::<_, i64>(4)? != 0,
+    }))
+}

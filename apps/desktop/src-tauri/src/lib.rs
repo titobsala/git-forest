@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
+use commands::agents::{detect_agents, launch_agent};
 use commands::app_info::get_app_info;
 use commands::forest::{get_forest_state, update_forest_configuration};
 use commands::repositories::{
@@ -9,6 +10,7 @@ use commands::repositories::{
     register_repository, remove_repository,
 };
 use commands::scan::{cancel_repository_scan, start_repository_scan};
+use commands::terminals::open_worktree;
 use commands::worktrees::{
     create_worktree, get_worktree_removal_preview, list_local_branches, list_worktrees,
     preview_create_worktree, refresh_worktrees, remove_worktree,
@@ -18,6 +20,7 @@ use persistence::Database;
 use platform::PlatformPaths;
 use scan::ScanCoordinator;
 
+mod agents;
 mod commands;
 mod domain;
 mod forest;
@@ -25,6 +28,7 @@ mod git;
 mod persistence;
 mod platform;
 mod scan;
+mod terminals;
 
 pub struct AppState {
     pub forest: Mutex<ForestService>,
@@ -62,7 +66,10 @@ pub fn run() {
             preview_create_worktree,
             create_worktree,
             get_worktree_removal_preview,
-            remove_worktree
+            remove_worktree,
+            open_worktree,
+            detect_agents,
+            launch_agent
         ])
         .run(tauri::generate_context!())
         .expect("error while running Git Forest");

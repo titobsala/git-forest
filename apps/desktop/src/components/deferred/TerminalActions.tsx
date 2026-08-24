@@ -1,16 +1,10 @@
 /**
  * Inline row actions — docs/design.md section 4.1 ("Instant action buttons").
  *
- * AWAITING BACKEND: Release 0.0.5 (Terminal Provider System) for the terminal
- * action, Release 0.0.6 (Agent Runner System) for the agent action. Neither
- * `open_worktree_in_terminal` nor `launch_agent_session` exists yet, so both
- * buttons render disabled with an explanatory title rather than pretending to
- * work.
- *
- * To wire: pass `onOpenTerminal` / `onLaunchAgent` handlers. A supplied
- * handler enables its button automatically.
+ * Terminal and agent actions enable when their handlers are supplied.
  */
 
+import type { MouseEvent } from "react";
 import { shortcutLabel } from "../../lib/keymap";
 
 interface TerminalActionsProps {
@@ -24,8 +18,7 @@ interface TerminalActionsProps {
   compact?: boolean;
 }
 
-const PENDING_TERMINAL = "Terminal launching arrives in release 0.0.5";
-const PENDING_AGENT = "Agent launching arrives in release 0.0.6";
+const PENDING_AGENT = "Launch the configured coding agent";
 
 export function TerminalActions({
   terminalName,
@@ -34,28 +27,40 @@ export function TerminalActions({
   onLaunchAgent,
   compact = false,
 }: TerminalActionsProps) {
+  function handleOpenTerminal(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onOpenTerminal?.();
+  }
+
+  function handleLaunchAgent(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onLaunchAgent?.();
+  }
+
   return (
     <span className="flex items-center gap-1">
       <button
         type="button"
         className="gf-button px-1.5 py-0.5 text-micro"
         disabled={!onOpenTerminal}
-        onClick={onOpenTerminal}
+        onClick={handleOpenTerminal}
+        onKeyDown={(event) => event.stopPropagation()}
         title={
           onOpenTerminal
             ? `Open in ${terminalName} (${shortcutLabel("selection.open")})`
-            : PENDING_TERMINAL
+            : "Open a worktree in the configured terminal"
         }
       >
         <span aria-hidden="true">▸</span>
-        {compact ? null : terminalName}
+        {compact ? null : <span aria-hidden="true">{terminalName}</span>}
         <span className="sr-only">Open in {terminalName}</span>
       </button>
       <button
         type="button"
         className="gf-button px-1.5 py-0.5 text-micro"
         disabled={!onLaunchAgent}
-        onClick={onLaunchAgent}
+        onClick={handleLaunchAgent}
+        onKeyDown={(event) => event.stopPropagation()}
         title={
           onLaunchAgent
             ? `Launch ${agentName} (${shortcutLabel("selection.agent")})`
@@ -63,7 +68,7 @@ export function TerminalActions({
         }
       >
         <span aria-hidden="true">✦</span>
-        {compact ? null : agentName}
+        {compact ? null : <span aria-hidden="true">{agentName}</span>}
         <span className="sr-only">Launch {agentName}</span>
       </button>
     </span>

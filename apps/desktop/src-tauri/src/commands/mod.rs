@@ -4,10 +4,12 @@ use crate::domain::{CommandError, ForestError};
 use crate::forest::ForestService;
 use crate::AppState;
 
+pub mod agents;
 pub mod app_info;
 pub mod forest;
 pub mod repositories;
 pub mod scan;
+pub mod terminals;
 pub mod worktrees;
 
 pub(crate) fn with_forest<T>(

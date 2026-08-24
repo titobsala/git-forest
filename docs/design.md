@@ -151,11 +151,11 @@ Before anything is typed, the palette shows the first seven runnable commands �
 
 **Context without a submenu.** Commands that act on a selection carry it in the subtitle (`New worktree… · EXOG App`) and go disabled with a reason (`Select a repository first`) when nothing is selected. That is the flat-list answer to context, and it covers the common case.
 
-**Disabled entries stay findable.** Anything that cannot run — a deferred feature, a command with nothing selected — is dimmed, marked `aria-disabled`, shows its reason as a badge, and is inert on `Enter`. It still matches the query, because a search for "terminal" is better answered with *Release 0.0.5* than with nothing.
+**Disabled entries stay findable.** Anything that cannot run — a deferred feature, a command with nothing selected — is dimmed, marked `aria-disabled`, shows its reason as a badge, and is inert on `Enter`. It still matches the query, because a search for "remove" with nothing selected is better answered with *Select a worktree first* than with nothing.
 
 **Destructive commands route, they never arm.** `Remove worktree…` reveals the inspector; `Remove repository…` opens the repository browser with the repository selected. The existing inline confirmations are where removal actually happens. A fuzzy-matched palette entry must not put a confirmation one keystroke away (AGENTS.md section 44).
 
-**Action submenu.** `Tab` on a highlighted repository or worktree replaces the list with actions scoped to that item — reveal, copy path, refresh, create, remove, plus the deferred terminal and agent launches. `Shift + Tab`, `ArrowLeft` or `Escape` comes back out, restoring the query that was typed before. The submenu consumes the first `Escape`; only the second closes the overlay.
+**Action submenu.** `Tab` on a highlighted repository or worktree replaces the list with actions scoped to that item — reveal, copy path, refresh, create, open in terminal, launch agent, remove. `Shift + Tab`, `ArrowLeft` or `Escape` comes back out, restoring the query that was typed before. The submenu consumes the first `Escape`; only the second closes the overlay.
 
 **Accessibility.** Section headings are `role="presentation"` list items inside the single listbox rather than nested groups, so `aria-activedescendant` keeps working and `ArrowUp`/`ArrowDown` cross a boundary without the user noticing one exists. `Tab` is always swallowed inside the palette: this is a command surface, and focus belongs in the field.
 
@@ -190,15 +190,15 @@ Before anything is typed, the palette shows the first seven runnable commands �
 
 ## 7. Implementation Status
 
-The desktop UI implements this specification as of release 0.0.4. Deviations, all deliberate:
+The desktop UI implements this specification as of release 0.0.6. Deviations, all deliberate:
 
 **Keyboard map (section 5).** `Tab` / `Shift + Tab` toggle the side panels **only while focus is inside the cockpit worktree list**, which is a composite widget with a roving tabindex where `↑` / `↓` already move the selection. Everywhere else — toolbar, forms, inspector, launcher — `Tab` keeps its native focus behaviour. Overriding it globally would have made the app unnavigable by keyboard, contradicting AGENTS.md section 43.
 
 `Super + W` is an OS-global shortcut requiring the Tauri global-shortcut plugin and window show/hide (release 0.0.7). The Quick Launch overlay opens on `Cmd/Ctrl + K` and from the L1 rail until then.
 
-`Enter` and `⌥A` are registered and resolve, but do nothing yet: they need the terminal provider (0.0.5) and agent runner (0.0.6).
+`Enter` opens the selected worktree in Warp. `⌥A` launches the configured default agent in that worktree.
 
-**Telemetry with no data source.** Agent session pills, the Warp/Cursor row actions, the stash pill and the tray process count are built to this specification and render inert — empty, or disabled with an explanatory tooltip — rather than showing placeholder values. Each is listed in ROADMAP.md under "Deferred UI wiring" against the release that will feed it. Stash counts are not on the roadmap at all: `Worktree` has no `stashCount` field.
+**Telemetry with no data source.** Agent session pills, the stash pill and the tray process count are built to this specification and render inert — empty, or disabled with an explanatory tooltip — rather than showing placeholder values. Each is listed in ROADMAP.md under "Deferred UI wiring" against the release that will feed it. Stash counts are not on the roadmap at all: `Worktree` has no `stashCount` field. Terminal and agent row actions are live as of 0.0.5 and 0.0.6.
 
 **Theme.** The specification's palette is light-only. A neutral dark theme was added on top of it in release 0.0.4 and is documented in section 8; the light tokens are unchanged.
 

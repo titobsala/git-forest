@@ -1,10 +1,10 @@
 /**
  * Agent monitor view — docs/design.md section 3.1 (L1 rail "Agent Monitor").
  *
- * AWAITING BACKEND: live sessions need releases 0.0.6 (Agent Runner System)
- * and 0.0.8 (Sessions & Process Tracking). Until then this lists the
- * configured agent definitions, which are real state, and says plainly that
- * no session tracking exists yet rather than inventing rows.
+ * AWAITING BACKEND: live sessions need Release 0.0.8 (Sessions & Process
+ * Tracking). Until then this lists the configured agent definitions, which
+ * are real state, and says plainly that no session tracking exists yet
+ * rather than inventing rows.
  */
 
 import type { AgentDefinition, ForestConfiguration } from "../../types/forest";
@@ -49,9 +49,9 @@ export function AgentMonitorView({
         <section className="gf-surface p-3">
           <h2 className="mb-2 text-heading text-ink">Running sessions</h2>
           <p className="text-body text-ink-muted">
-            No session tracking yet. Launching agents arrives in release 0.0.6
-            and live process state in release 0.0.8; this view will list running
-            sessions, their worktree and their PID.
+            Agents launch from a selected worktree. Live session tracking
+            arrives in release 0.0.8; this view will then list running sessions,
+            their worktree and their PID.
           </p>
         </section>
       </div>

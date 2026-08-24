@@ -6,4 +6,9 @@ Canonical project documents live at the repository root:
 - [AGENTS.md](../AGENTS.md) — contributor and coding-agent instructions
 - [ROADMAP.md](../ROADMAP.md) — product and engineering roadmap
 
-Architecture notes and decision records will land in `architecture/` and `decisions/` as they appear.
+Decision records:
+
+- [0004. Terminal provider interface](decisions/0004-terminal-provider-interface.md)
+- [0005. Agent runner interface](decisions/0005-agent-runner-interface.md)
+
+Architecture notes will land in `architecture/` as they appear.

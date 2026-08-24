@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigurationPanel } from "./ConfigurationPanel";
 import { FALLBACK_FOREST_STATE } from "../types/forest";
+import { detectAgents } from "../lib/agents";
+
+vi.mock("../lib/agents", () => ({
+  detectAgents: vi.fn(),
+}));
 
 const state = {
   ...FALLBACK_FOREST_STATE,
@@ -10,6 +15,10 @@ const state = {
 };
 
 describe("ConfigurationPanel", () => {
+  beforeEach(() => {
+    vi.mocked(detectAgents).mockResolvedValue([]);
+  });
+
   it("saves configuration from the form", () => {
     const onSave = vi.fn();
     render(
@@ -123,5 +132,61 @@ describe("ConfigurationPanel", () => {
     );
 
     expect(screen.getByLabelText("Forest root path")).toHaveValue("/tmp/saved");
+  });
+
+  it("shows installed and missing agent status", async () => {
+    vi.mocked(detectAgents).mockResolvedValue([
+      {
+        id: "codex",
+        name: "Codex",
+        command: "codex",
+        installed: true,
+      },
+      {
+        id: "opencode",
+        name: "OpenCode",
+        command: "opencode",
+        installed: false,
+      },
+    ]);
+
+    render(
+      <ConfigurationPanel
+        state={state}
+        busy={false}
+        onSave={vi.fn()}
+        onSelectTheme={vi.fn()}
+      />,
+    );
+
+    const list = await screen.findByRole("list", {
+      name: "Agent availability",
+    });
+    expect(list).toHaveTextContent("Codex — Installed");
+    expect(list).toHaveTextContent("OpenCode — Missing");
+  });
+
+  it("surfaces a detection failure instead of showing no agents", async () => {
+    vi.mocked(detectAgents).mockRejectedValue({
+      code: "database_unavailable",
+      message: "database is locked",
+    });
+
+    render(
+      <ConfigurationPanel
+        state={state}
+        busy={false}
+        onSave={vi.fn()}
+        onSelectTheme={vi.fn()}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Agent detection failed: database is locked",
+    );
+    expect(
+      screen.queryByRole("list", { name: "Agent availability" }),
+    ).not.toBeInTheDocument();
   });
 });

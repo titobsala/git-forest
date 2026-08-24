@@ -36,6 +36,8 @@ interface InspectorPanelProps {
   onToggleCollapsed: () => void;
   onWorktreesChanged: (worktrees: Worktree[]) => void;
   onRemoved: () => void;
+  onOpenTerminal?: (worktree: Worktree) => void;
+  onLaunchAgent?: (worktree: Worktree) => void;
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -58,6 +60,8 @@ export function InspectorPanel({
   onToggleCollapsed,
   onWorktreesChanged,
   onRemoved,
+  onOpenTerminal,
+  onLaunchAgent,
 }: InspectorPanelProps) {
   const [preview, setPreview] = useState<WorktreeRemovalPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -240,11 +244,18 @@ export function InspectorPanel({
             <TerminalActions
               terminalName={configuration.defaultTerminal}
               agentName={agentName}
+              onOpenTerminal={
+                onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
+              }
+              onLaunchAgent={
+                onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
+              }
             />
-            <p className="text-micro text-ink-muted">
-              Terminal launching lands in release 0.0.5, agent sessions in
-              0.0.6.
-            </p>
+            {onLaunchAgent ? null : (
+              <p className="text-micro text-ink-muted">
+                Session tracking lands in release 0.0.8.
+              </p>
+            )}
           </div>
 
           {error ? (

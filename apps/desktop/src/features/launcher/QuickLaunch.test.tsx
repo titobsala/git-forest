@@ -19,6 +19,8 @@ function setup(overrides: { actions?: Partial<CommandActions> } = {}) {
     refreshRepository: vi.fn(),
     openSettings: vi.fn(),
     revealInspector: vi.fn(),
+    openTerminal: vi.fn(),
+    launchAgent: vi.fn(),
     ...overrides.actions,
   };
 
@@ -29,6 +31,8 @@ function setup(overrides: { actions?: Partial<CommandActions> } = {}) {
     copyPath: vi.fn(),
     removeWorktree: vi.fn(),
     removeRepository: vi.fn(),
+    openTerminal: vi.fn(),
+    launchAgent: vi.fn(),
     canCopy: true,
   };
 
@@ -97,15 +101,15 @@ describe("QuickLaunch", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("does nothing when a deferred command is chosen", async () => {
+  it("launches the selected worktree's agent from a command", async () => {
     const user = userEvent.setup();
-    const { onClose } = setup();
+    const { actions, onClose } = setup();
 
-    await user.keyboard("terminal");
-    expect(screen.getByText("Release 0.0.5")).toBeInTheDocument();
-
+    await user.keyboard("launch agent");
     await user.keyboard("{Enter}");
-    expect(onClose).not.toHaveBeenCalled();
+
+    expect(actions.launchAgent).toHaveBeenCalledWith(worktree);
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("opens the action submenu for the highlighted worktree on Tab", async () => {

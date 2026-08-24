@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { resolveShortcut } from "../../lib/keymap";
+import { isInteractiveTarget, resolveShortcut } from "../../lib/keymap";
 import type {
   AgentDefinition,
   ForestConfiguration,
@@ -33,6 +33,8 @@ interface CockpitViewProps {
   onToggleRepositories: () => void;
   onToggleInspector: () => void;
   onNewWorktree: () => void;
+  onOpenTerminal?: (worktree: Worktree) => void;
+  onLaunchAgent?: (worktree: Worktree) => void;
 }
 
 export function CockpitView({
@@ -46,6 +48,8 @@ export function CockpitView({
   onToggleRepositories,
   onToggleInspector,
   onNewWorktree,
+  onOpenTerminal,
+  onLaunchAgent,
 }: CockpitViewProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CockpitFilter>("all");
@@ -132,6 +136,10 @@ export function CockpitView({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (isInteractiveTarget(event.target)) {
+      return;
+    }
+
     const id = resolveShortcut(event, ["cockpitList"]);
     if (!id) {
       return;
@@ -154,8 +162,22 @@ export function CockpitView({
         event.preventDefault();
         onToggleInspector();
         break;
-      // selection.open / selection.agent are inert until releases 0.0.5 and
-      // 0.0.6 add the terminal and agent commands.
+      case "selection.open": {
+        event.preventDefault();
+        const active = rows.find((row) => row.worktree.id === activeWorktreeId);
+        if (active && onOpenTerminal) {
+          onOpenTerminal(active.worktree);
+        }
+        break;
+      }
+      case "selection.agent": {
+        event.preventDefault();
+        const active = rows.find((row) => row.worktree.id === activeWorktreeId);
+        if (active && onLaunchAgent) {
+          onLaunchAgent(active.worktree);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -212,6 +234,8 @@ export function CockpitView({
               onSelectWorktree={onSelectWorktree}
               terminalName={configuration.defaultTerminal}
               agentName={agentName}
+              onOpenTerminal={onOpenTerminal}
+              onLaunchAgent={onLaunchAgent}
             />
           ))}
         </div>

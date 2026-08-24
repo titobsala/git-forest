@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
+import { openWorktreeInTerminal } from "../lib/terminals";
+import { detectAgents, launchAgent } from "../lib/agents";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import {
   FALLBACK_FOREST_STATE,
@@ -16,7 +18,7 @@ const nativeState = {
   schemaVersion: 2,
   appInfo: {
     name: "Git Forest",
-    version: "0.0.4",
+    version: "0.0.6",
     tagline: "Worktrees in reach.",
   },
   repositories: [sampleRepository()],
@@ -51,6 +53,15 @@ vi.mock("../lib/worktrees", () => ({
   removeWorktree: vi.fn(),
 }));
 
+vi.mock("../lib/terminals", () => ({
+  openWorktreeInTerminal: vi.fn(),
+}));
+
+vi.mock("../lib/agents", () => ({
+  detectAgents: vi.fn(),
+  launchAgent: vi.fn(),
+}));
+
 // `restoreMocks: true` resets implementations between tests, so every mock the
 // shell depends on has to be re-established here rather than at module scope.
 beforeEach(async () => {
@@ -59,6 +70,13 @@ beforeEach(async () => {
   vi.mocked(scan.listenToScanComplete).mockResolvedValue(() => undefined);
   vi.mocked(listWorktrees).mockResolvedValue([]);
   vi.mocked(refreshWorktrees).mockResolvedValue([]);
+  vi.mocked(openWorktreeInTerminal).mockResolvedValue({ provider: "warp" });
+  vi.mocked(launchAgent).mockResolvedValue({
+    provider: "warp",
+    agentId: "codex",
+    command: "codex",
+  });
+  vi.mocked(detectAgents).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -97,7 +115,7 @@ describe("App", () => {
 
     // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
-    expect(screen.queryByText("v0.0.4")).not.toBeInTheDocument();
+    expect(screen.queryByText("v0.0.6")).not.toBeInTheDocument();
   });
 
   it("groups worktrees under their repository with telemetry badges", async () => {
@@ -344,5 +362,136 @@ describe("App", () => {
     expect(
       screen.getByRole("navigation", { name: "Primary" }),
     ).toBeInTheDocument();
+  });
+
+  it("opens a worktree in Warp from the cockpit row", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Open in warp" }));
+
+    expect(openWorktreeInTerminal).toHaveBeenCalledWith("wt-1");
+  });
+
+  it("opens the active worktree in Warp from the cockpit Enter shortcut", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    const option = await screen.findByRole("option", {
+      name: /feat\/risk-483/,
+    });
+    option.focus();
+    await user.keyboard("{Enter}");
+
+    expect(openWorktreeInTerminal).toHaveBeenCalledWith("wt-1");
+  });
+
+  it("shows a typed terminal error instead of failing silently", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(openWorktreeInTerminal).mockRejectedValue({
+      code: "terminal_unavailable",
+      message: "Warp is not available",
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Open in warp" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Warp is not available",
+    );
+  });
+
+  it("launches Codex from the cockpit row", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Launch Codex" }));
+
+    expect(launchAgent).toHaveBeenCalledWith("wt-1");
+  });
+
+  it("launches Codex from the cockpit Alt+A shortcut", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    const option = await screen.findByRole("option", {
+      name: /feat\/risk-483/,
+    });
+    option.focus();
+    await user.keyboard("{Alt>}a{/Alt}");
+
+    expect(launchAgent).toHaveBeenCalledWith("wt-1");
+  });
+
+  it("keeps Enter on a focused agent button from opening the terminal", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    cockpit.getByRole("button", { name: "Launch Codex" }).focus();
+    await user.keyboard("{Enter}");
+
+    expect(launchAgent).toHaveBeenCalledWith("wt-1");
+    expect(openWorktreeInTerminal).not.toHaveBeenCalled();
+  });
+
+  it("shows a typed agent error instead of failing silently", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(launchAgent).mockRejectedValue({
+      code: "agent_unavailable",
+      message: "Codex is not available",
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Launch Codex" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Codex is not available",
+    );
   });
 });
