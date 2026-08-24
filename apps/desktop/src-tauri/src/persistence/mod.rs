@@ -6,7 +6,9 @@ mod worktrees;
 
 pub use database::Database;
 
-pub(crate) use agent_definitions::{agent_exists, list_agent_definitions, seed_builtin_agents};
+pub(crate) use agent_definitions::{
+    agent_exists, get_agent_definition, list_agent_definitions, seed_builtin_agents,
+};
 pub(crate) use repositories::{
     delete_by_id, find_by_id, find_by_path, insert_repository, list_repositories, update_repository,
 };

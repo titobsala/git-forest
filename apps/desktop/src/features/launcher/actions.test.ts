@@ -32,13 +32,15 @@ function context(overrides: Partial<ActionContext> = {}): ActionContext {
     copyPath: vi.fn(),
     removeWorktree: vi.fn(),
     removeRepository: vi.fn(),
+    openTerminal: vi.fn(),
+    launchAgent: vi.fn(),
     canCopy: true,
     ...overrides,
   };
 }
 
 describe("buildActions", () => {
-  it("offers worktree actions with terminal and agent still deferred", () => {
+  it("offers worktree actions including terminal and agent", () => {
     const actions = buildActions(worktreeResult, context());
 
     expect(actions.map((action) => action.id)).toEqual([
@@ -48,12 +50,12 @@ describe("buildActions", () => {
       "agent",
       "remove",
     ]);
-    expect(actions.find((a) => a.id === "terminal")?.disabledReason).toBe(
-      "Release 0.0.5",
-    );
-    expect(actions.find((a) => a.id === "agent")?.disabledReason).toBe(
-      "Release 0.0.6",
-    );
+    expect(
+      actions.find((a) => a.id === "terminal")?.disabledReason,
+    ).toBeUndefined();
+    expect(
+      actions.find((a) => a.id === "agent")?.disabledReason,
+    ).toBeUndefined();
   });
 
   it("offers repository actions", () => {
@@ -91,6 +93,24 @@ describe("buildActions", () => {
 
     expect(ctx.newWorktree).toHaveBeenCalledWith(repository);
   });
+
+  it("opens the worktree in the terminal", () => {
+    const ctx = context();
+    buildActions(worktreeResult, ctx)
+      .find((action) => action.id === "terminal")
+      ?.run();
+
+    expect(ctx.openTerminal).toHaveBeenCalledWith(worktree);
+  });
+
+  it("launches the configured agent in the worktree", () => {
+    const ctx = context();
+    buildActions(worktreeResult, ctx)
+      .find((action) => action.id === "agent")
+      ?.run();
+
+    expect(ctx.launchAgent).toHaveBeenCalledWith(worktree);
+  });
 });
 
 describe("filterActions", () => {
@@ -100,10 +120,11 @@ describe("filterActions", () => {
     expect(filterActions(actions, "")).toHaveLength(actions.length);
   });
 
-  it("ranks deferred actions last", () => {
-    const shown = filterActions(actions, "e");
+  it("ranks a matching action first", () => {
+    const shown = filterActions(actions, "agent");
 
-    expect(shown.at(-1)?.disabledReason).toBeDefined();
+    expect(shown[0]?.id).toBe("agent");
+    expect(shown[0]?.disabledReason).toBeUndefined();
   });
 
   it("narrows to a single action", () => {

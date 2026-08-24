@@ -5,7 +5,7 @@
 Current implementation:
 
 ```text
-Release 0.0.4
+Release 0.0.6
 ```
 
 Completed:
@@ -15,12 +15,14 @@ Completed:
 0.0.2 Forest Configuration & Domain Model
 0.0.3 Git-aware repository indexing
 0.0.4 Git worktree lifecycle
+0.0.5 Terminal Provider System
+0.0.6 Agent Runner System
 ```
 
 Next:
 
 ```text
-0.0.5 Terminal Provider System
+0.0.7 Quick Launcher
 ```
 
 The 1.0 release remains the first complete local MVP. `WorkspaceSession` from the original 0.0.2 type list is deferred to Release 0.0.8 (Sessions & Process Tracking).
@@ -31,25 +33,21 @@ This roadmap deliberately separates **foundational correctness** from richer int
 
 ## Deferred UI wiring
 
-The desktop UI was built ahead of the backend against `docs/design.md`. The three interaction surfaces (Quick Launcher, Cockpit, Tray) exist today; the components below are rendered but inert because no command feeds them yet.
+The desktop UI was built ahead of the backend against `docs/design.md`. The three interaction surfaces (Quick Launcher, Cockpit, Tray) exist today. Terminal open and agent launch are live as of releases 0.0.5 and 0.0.6. The components below are still inert because no command feeds them yet.
 
 They are complete markup and styling. Landing the release listed against each one should be a wiring change, not a design change.
 
 | Component | File | Waiting on |
 | --- | --- | --- |
-| `TerminalActions` (terminal half) | `components/deferred/TerminalActions.tsx` | 0.0.5 — pass an `onOpenTerminal` handler to enable the button |
-| `TerminalActions` (agent half) | `components/deferred/TerminalActions.tsx` | 0.0.6 — pass an `onLaunchAgent` handler |
-| `AgentBadge` | `components/deferred/AgentBadge.tsx` | 0.0.6 / 0.0.8 — pass a real `AgentSession` instead of `null` |
-| Cockpit "Agents" filter pill | `features/cockpit/filters.ts` | 0.0.6 / 0.0.8 — supply the `hasAgentSession` predicate |
+| `AgentBadge` | `components/deferred/AgentBadge.tsx` | 0.0.8 — pass a real `AgentSession` instead of `null` |
+| Cockpit "Agents" filter pill | `features/cockpit/filters.ts` | 0.0.8 — supply the `hasAgentSession` predicate |
 | Agent monitor "Running sessions" | `features/agents/AgentMonitorView.tsx` | 0.0.8 — replace the placeholder with the session list |
 | `TrayPanel` active-agent count | `features/tray/TrayPanel.tsx` | 0.0.8 — replace `counts.agents: null` |
 | `Super + W` global shortcut | `features/launcher/QuickLaunch.tsx` | 0.0.7 — Tauri global-shortcut plugin plus window show/hide; the overlay opens on `Cmd/Ctrl+K` today |
-| Quick Launch `Open in terminal` | `features/launcher/commands.ts`, `features/launcher/actions.ts` | 0.0.5 — give the `worktree.terminal` command and the `terminal` action a real `run`, and drop `TERMINAL_PENDING` |
-| Quick Launch `Launch agent` | `features/launcher/commands.ts`, `features/launcher/actions.ts` | 0.0.6 — give the `worktree.agent` command and the `agent` action a real `run`, and drop `AGENT_PENDING` |
 | Native system tray | `features/tray/TrayPanel.tsx` | 0.5.0 — the panel body becomes the native menu |
 | `StashPill` | `components/deferred/StashPill.tsx` | **unscheduled** — `Worktree` has no `stashCount` and `git/status.rs` does not read the stash reflog. `docs/design.md` section 4.1 specifies the badge; a release needs to claim it |
 
-`selection.open` (`Enter`) and `selection.agent` (`⌥A`) are registered in `lib/keymap.ts` and resolve correctly, but the cockpit's handler ignores them until 0.0.5 and 0.0.6 respectively. Both appear in Quick Launch as disabled entries naming the release they arrive in, so a search for "terminal" is answered rather than empty.
+`selection.open` (`Enter`) opens the selected worktree in Warp. `selection.agent` (`⌥A`) launches the configured default agent in that worktree. Both are also available from cockpit rows, the inspector, and Quick Launch.
 
 ---
 
@@ -733,7 +731,7 @@ User can:
 
 Status: **complete**.
 
-Git is authoritative for worktree facts. SQLite stores Forest IDs and timestamps only. This release lists and reconciles worktrees (including external ones), inspects local status without network, creates a new branch from a local base under `~/forest/worktrees/<repo>/<slug>`, and removes with an explicit dirty/force preflight. Attaching an existing branch, deleting branches, pruning stale Git records, terminal launch, and agent launch remain later work.
+Git is authoritative for worktree facts. SQLite caches Forest IDs plus reconciled identity metadata (`name`, `path`, `branch`) and timestamps so Forest can reattach the same worktree across refreshes; Git remains the source of truth and is re-read on every list. This release lists and reconciles worktrees (including external ones), inspects local status without network, creates a new branch from a local base under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>` (the repository id keeps same-named repositories from colliding), and removes with an explicit dirty/force preflight. Attaching an existing branch, deleting branches, pruning stale Git records, terminal launch, and agent launch remain later work.
 
 ## Goal
 
@@ -791,14 +789,16 @@ worktree name/path
 Default location for managed worktrees:
 
 ```text
-~/forest/worktrees/<repository>/<worktree>
+~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>
 ```
 
 Example:
 
 ```text
-~/forest/worktrees/exog-app/feat-risk-483
+~/forest/worktrees/exog-app-a1b2c3d4/feat-risk-483
 ```
+
+The repository id is appended so two indexed repositories with the same display name keep isolated worktree directories. The Git branch name is left unchanged; only the directory slug is normalized.
 
 Normalize filenames safely without changing the actual Git branch name unnecessarily.
 
@@ -892,7 +892,9 @@ This release should already be useful even without terminal or agent support.
 
 # Release 0.0.5 — Terminal Provider System
 
-> **UI already built.** The row and inspector actions exist in `components/deferred/TerminalActions.tsx`, rendered disabled. Passing an `onOpenTerminal` handler enables them; no markup change is needed. See "Deferred UI wiring".
+Status: **complete**.
+
+Warp is the first terminal provider. Forest opens a present worktree through `open_worktree` using Warp's URI scheme (`new_tab` for Auto/Tab, `new_window` for Window), caches availability for 30 seconds, and returns typed `TerminalUnavailable` / `TerminalLaunchFailed` errors. Cockpit rows, the inspector, `Enter`, and Quick Launch all open Warp. See [0004. Terminal provider interface](docs/decisions/0004-terminal-provider-interface.md).
 
 ## Goal
 
@@ -974,7 +976,9 @@ If Warp is already in use, Forest opens the workspace as a new tab rather than n
 
 # Release 0.0.6 — Agent Runner System
 
-> **UI already built.** `components/deferred/AgentBadge.tsx` renders the session pill (pulsing dot, agent name, PID) and returns `null` while no session exists. The agent action in `TerminalActions` and the cockpit "Agents" filter pill activate from the same data. See "Deferred UI wiring".
+Status: **complete**.
+
+Forest detects the seeded Codex, Claude Code, OpenCode, and Cursor CLI executables on `PATH` and launches the configured default (or an explicit built-in) through Warp Tab Configs prefixed `git-forest-`. Arguments stay structured until a tested encoder produces Warp's command string; worktree paths are Warp's `directory` field, never interpolated. Session persistence, live process reconciliation, custom-agent management, `AgentBadge`, the Agents filter, and tray session counts remain Release 0.0.8. See [0005. Agent runner interface](docs/decisions/0005-agent-runner-interface.md).
 
 ## Goal
 
@@ -1189,6 +1193,8 @@ This should be the first release where the intended product experience is clearl
 ---
 
 # Release 0.0.8 — Sessions & Process Tracking
+
+> Launching Codex, Claude Code, and OpenCode through Warp is complete in 0.0.6. This release adds persistent session metadata, OS process reconciliation, `AgentBadge`, the Agents filter, the monitor list, and tray counts.
 
 ## Goal
 

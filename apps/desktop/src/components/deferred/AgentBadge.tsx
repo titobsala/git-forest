@@ -1,9 +1,9 @@
 /**
  * Agent session pill — docs/design.md section 4.1.
  *
- * AWAITING BACKEND: Release 0.0.6 (Agent Runner System) + 0.0.8 (Sessions &
- * Process Tracking). No `list_agent_sessions` command exists yet, so callers
- * always pass `session={null}` and this renders nothing.
+ * AWAITING BACKEND: Release 0.0.8 (Sessions & Process Tracking). No
+ * `list_agent_sessions` command exists yet, so callers always pass
+ * `session={null}` and this renders nothing.
  *
  * To wire: supply the real `AgentSession` and its `AgentDefinition` name. No
  * markup change is required.

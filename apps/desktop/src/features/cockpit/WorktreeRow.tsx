@@ -28,6 +28,8 @@ interface WorktreeRowProps {
   onSelect: () => void;
   terminalName: string;
   agentName: string;
+  onOpenTerminal?: () => void;
+  onLaunchAgent?: () => void;
 }
 
 export function WorktreeRow({
@@ -39,12 +41,14 @@ export function WorktreeRow({
   onSelect,
   terminalName,
   agentName,
+  onOpenTerminal,
+  onLaunchAgent,
 }: WorktreeRowProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (selected && tabbable && document.activeElement !== ref.current) {
-      ref.current?.scrollIntoView({ block: "nearest" });
+      ref.current?.scrollIntoView?.({ block: "nearest" });
     }
   }, [selected, tabbable]);
 
@@ -59,9 +63,9 @@ export function WorktreeRow({
       onClick={onSelect}
       onFocus={onSelect}
       onKeyDown={(event) => {
-        // Rows are focusable via the roving tabindex, so Enter and Space must
-        // select just as a click does. Other keys bubble to the listbox.
-        if (event.key === "Enter" || event.key === " ") {
+        // Space selects the focused row. Enter bubbles to the listbox so
+        // `selection.open` can launch the terminal.
+        if (event.key === " ") {
           event.preventDefault();
           onSelect();
         }
@@ -117,6 +121,8 @@ export function WorktreeRow({
           terminalName={terminalName}
           agentName={agentName}
           compact
+          onOpenTerminal={onOpenTerminal}
+          onLaunchAgent={onLaunchAgent}
         />
       </span>
     </div>

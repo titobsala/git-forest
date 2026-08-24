@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::agents::{ExecutableLocator, PathLocator};
 use crate::domain::{
     AppInfo, ForestConfiguration, ForestError, ForestState, LaunchBehavior, Repository,
     TerminalProviderId, ThemePreference, WorktreeNamingStrategy,
@@ -10,24 +11,41 @@ use crate::persistence::{
     save_configuration, seed_builtin_agents, Database,
 };
 use crate::platform::PlatformPaths;
+use crate::terminals::WarpProvider;
 
+mod agents;
 mod naming;
 mod repositories;
+mod terminals;
 mod worktrees;
 
 pub struct ForestService {
     db: Database,
     platform: PlatformPaths,
     git: GitRunner,
+    terminals: WarpProvider,
+    executables: Box<dyn ExecutableLocator>,
 }
 
 impl ForestService {
     pub fn initialize(db: Database, platform: PlatformPaths) -> Result<Self, ForestError> {
+        let terminals = WarpProvider::system(platform.home_dir());
+        Self::initialize_with(db, platform, terminals, Box::new(PathLocator))
+    }
+
+    pub(crate) fn initialize_with(
+        db: Database,
+        platform: PlatformPaths,
+        terminals: WarpProvider,
+        executables: Box<dyn ExecutableLocator>,
+    ) -> Result<Self, ForestError> {
         db.migrate()?;
         let service = Self {
             db,
             platform,
             git: GitRunner::new(),
+            terminals,
+            executables,
         };
         service.ensure_default_configuration()?;
         seed_builtin_agents(service.db.connection())?;
@@ -137,7 +155,7 @@ pub(crate) mod tests {
             Self { root }
         }
 
-        fn platform(&self) -> PlatformPaths {
+        pub(crate) fn platform(&self) -> PlatformPaths {
             PlatformPaths::new(self.root.join("app-data"), self.root.join("home"))
         }
 
@@ -153,8 +171,27 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn open_service(env: &TempEnv) -> ForestService {
+        open_service_with(
+            env,
+            crate::terminals::WarpProvider::system(env.platform().home_dir()),
+        )
+    }
+
+    pub(crate) fn open_service_with(
+        env: &TempEnv,
+        terminals: crate::terminals::WarpProvider,
+    ) -> ForestService {
+        open_service_with_locator(env, terminals, Box::new(crate::agents::PathLocator))
+    }
+
+    pub(crate) fn open_service_with_locator(
+        env: &TempEnv,
+        terminals: crate::terminals::WarpProvider,
+        executables: Box<dyn crate::agents::ExecutableLocator>,
+    ) -> ForestService {
         let db = Database::open(&env.db_path()).expect("open db");
-        ForestService::initialize(db, env.platform()).expect("initialize")
+        ForestService::initialize_with(db, env.platform(), terminals, executables)
+            .expect("initialize")
     }
 
     #[test]

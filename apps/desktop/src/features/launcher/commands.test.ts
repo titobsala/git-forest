@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { sampleRepository, sampleWorktree } from "../../types/forest";
 import {
-  AGENT_PENDING,
   buildCommands,
   filterCommands,
-  TERMINAL_PENDING,
   type CommandActions,
   type CommandContext,
 } from "./commands";
@@ -19,6 +17,8 @@ function actionSpies(): CommandActions {
     refreshRepository: vi.fn(),
     openSettings: vi.fn(),
     revealInspector: vi.fn(),
+    openTerminal: vi.fn(),
+    launchAgent: vi.fn(),
   };
 }
 
@@ -64,17 +64,28 @@ describe("buildCommands", () => {
     expect(command?.subtitle).toBe("EXOG App");
   });
 
-  it("keeps terminal and agent disabled even with a worktree selected", () => {
+  it("opens the selected worktree in the terminal", () => {
+    const actions = actionSpies();
+    const worktree = sampleWorktree();
     const commands = buildCommands(
-      context({ selectedWorktree: sampleWorktree() }),
+      context({ selectedWorktree: worktree, actions }),
     );
 
-    expect(byId(commands, "worktree.terminal")?.disabledReason).toBe(
-      TERMINAL_PENDING,
+    expect(byId(commands, "worktree.terminal")?.disabledReason).toBeUndefined();
+    byId(commands, "worktree.terminal")?.run();
+    expect(actions.openTerminal).toHaveBeenCalledWith(worktree);
+  });
+
+  it("launches the configured agent in the selected worktree", () => {
+    const actions = actionSpies();
+    const worktree = sampleWorktree();
+    const commands = buildCommands(
+      context({ selectedWorktree: worktree, actions }),
     );
-    expect(byId(commands, "worktree.agent")?.disabledReason).toBe(
-      AGENT_PENDING,
-    );
+
+    expect(byId(commands, "worktree.agent")?.disabledReason).toBeUndefined();
+    byId(commands, "worktree.agent")?.run();
+    expect(actions.launchAgent).toHaveBeenCalledWith(worktree);
   });
 
   it("marks the theme already in effect as current", () => {
@@ -141,11 +152,18 @@ describe("filterCommands", () => {
     expect(shown[0]?.id).toBe("view.settings");
   });
 
-  it("keeps a deferred command findable but ranks it last", () => {
+  it("ranks an available agent command among the matches", () => {
+    const shown = filterCommands(commands, "codex");
+
+    expect(shown[0]?.id).toBe("worktree.agent");
+    expect(shown[0]?.disabledReason).toBeUndefined();
+  });
+
+  it("ranks an available terminal command among the matches", () => {
     const shown = filterCommands(commands, "terminal");
 
-    expect(shown.map((command) => command.id)).toContain("worktree.terminal");
-    expect(shown.at(-1)?.id).toBe("worktree.terminal");
+    expect(shown[0]?.id).toBe("worktree.terminal");
+    expect(shown[0]?.disabledReason).toBeUndefined();
   });
 
   it("returns nothing when there is no match", () => {

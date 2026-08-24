@@ -128,11 +128,14 @@ impl ForestService {
         })
     }
 
-    fn require_repository(&self, id: &RepositoryId) -> Result<Repository, ForestError> {
+    pub(super) fn require_repository(&self, id: &RepositoryId) -> Result<Repository, ForestError> {
         find_by_id(self.db.connection(), id)?.ok_or(ForestError::RepositoryNotFound)
     }
 
-    fn require_worktree_summary(&self, id: &WorktreeId) -> Result<Worktree, ForestError> {
+    pub(super) fn require_worktree_summary(
+        &self,
+        id: &WorktreeId,
+    ) -> Result<Worktree, ForestError> {
         let record =
             find_worktree_by_id(self.db.connection(), id)?.ok_or(ForestError::WorktreeNotFound)?;
         let repository = self.require_repository(&record.repository_id)?;
@@ -686,5 +689,178 @@ mod tests {
             .list_worktrees(repository.id)
             .expect_err("status failure");
         assert!(matches!(error, ForestError::GitCommandFailed(_)));
+    }
+
+    #[test]
+    fn lists_a_detached_worktree() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/detached".into(),
+                name: None,
+            })
+            .expect("create");
+        run_git(&created.worktree.path, &["checkout", "--detach"]);
+
+        let worktrees = service.list_worktrees(repository.id).expect("list");
+        let detached = worktrees
+            .iter()
+            .find(|item| item.id == created.worktree.id)
+            .expect("detached");
+        assert!(detached.detached);
+        assert!(detached.present);
+        assert!(detached.git_known);
+    }
+
+    #[test]
+    fn git_known_missing_directory_is_surfaced_and_blocked_from_removal() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/missing-dir".into(),
+                name: None,
+            })
+            .expect("create");
+        fs::remove_dir_all(&created.worktree.path).expect("remove directory");
+
+        let worktrees = service.list_worktrees(repository.id).expect("list");
+        let missing = worktrees
+            .iter()
+            .find(|item| item.id == created.worktree.id)
+            .expect("missing");
+        assert!(!missing.present);
+        assert!(missing.git_known);
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(preview.blockers.contains(&RemovalBlocker::Missing));
+        assert!(!preview.requires_force);
+        let result = service
+            .remove_worktree(created.worktree.id, true)
+            .expect("still blocked");
+        assert!(!result.removed);
+    }
+
+    #[test]
+    fn create_rejects_an_occupied_destination_path() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let preview = service
+            .preview_create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/occupied".into(),
+                name: None,
+            })
+            .expect("preview");
+        fs::create_dir_all(&preview.destination).expect("occupy destination");
+
+        let error = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/occupied".into(),
+                name: None,
+            })
+            .expect_err("occupied");
+        assert!(matches!(error, ForestError::WorktreePathUnavailable));
+    }
+
+    #[test]
+    fn create_rejects_a_stale_git_worktree_occupying_the_destination() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/stale-slot".into(),
+                name: Some("shared-slot".into()),
+            })
+            .expect("create");
+        fs::remove_dir_all(&created.worktree.path).expect("remove directory");
+
+        let error = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/replacement".into(),
+                name: Some("shared-slot".into()),
+            })
+            .expect_err("stale occupancy");
+        assert!(matches!(error, ForestError::WorktreeAlreadyExists));
+    }
+
+    #[test]
+    fn remove_requires_force_for_tracked_dirty_worktrees() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        fs::write(repository.path.join("tracked.txt"), "original\n").expect("write");
+        run_git(&repository.path, &["add", "tracked.txt"]);
+        run_git(&repository.path, &["commit", "-m", "add tracked file"]);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/tracked-dirty".into(),
+                name: None,
+            })
+            .expect("create");
+        fs::write(created.worktree.path.join("tracked.txt"), "changed\n").expect("dirty");
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(!preview.allowed);
+        assert!(preview.requires_force);
+        assert!(preview.blockers.contains(&RemovalBlocker::Dirty));
+
+        let blocked = service
+            .remove_worktree(created.worktree.id.clone(), false)
+            .expect("blocked");
+        assert!(!blocked.removed);
+        assert!(created.worktree.path.exists());
+    }
+
+    #[test]
+    fn removes_a_clean_created_worktree_and_keeps_the_branch() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/clean".into(),
+                name: None,
+            })
+            .expect("create");
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(preview.allowed);
+        assert!(!preview.requires_force);
+
+        let removed = service
+            .remove_worktree(created.worktree.id.clone(), false)
+            .expect("remove");
+        assert!(removed.removed);
+        assert!(!created.worktree.path.exists());
+        assert!(!removed
+            .worktrees
+            .iter()
+            .any(|item| item.id == created.worktree.id));
+        let branches = crate::git::testing::isolated_git(&repository.path)
+            .args(["branch", "--list", "feat/clean"])
+            .output()
+            .expect("branch");
+        assert!(String::from_utf8_lossy(&branches.stdout).contains("feat/clean"));
     }
 }

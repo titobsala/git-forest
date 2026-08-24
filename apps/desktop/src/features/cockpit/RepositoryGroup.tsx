@@ -32,6 +32,8 @@ interface RepositoryGroupProps {
   onSelectWorktree: (worktree: Worktree, repository: Repository) => void;
   terminalName: string;
   agentName: string;
+  onOpenTerminal?: (worktree: Worktree) => void;
+  onLaunchAgent?: (worktree: Worktree) => void;
 }
 
 export function RepositoryGroup({
@@ -48,6 +50,8 @@ export function RepositoryGroup({
   onSelectWorktree,
   terminalName,
   agentName,
+  onOpenTerminal,
+  onLaunchAgent,
 }: RepositoryGroupProps) {
   useEffect(() => {
     if (!collapsed) {
@@ -124,6 +128,12 @@ export function RepositoryGroup({
                 onSelect={() => onSelectWorktree(worktree, repository)}
                 terminalName={terminalName}
                 agentName={agentName}
+                onOpenTerminal={
+                  onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
+                }
+                onLaunchAgent={
+                  onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
+                }
               />
             ))
           )}

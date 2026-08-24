@@ -69,6 +69,8 @@ export interface CommandActions {
    * Commands route the user to a confirmation, they never arm one.
    */
   revealInspector: () => void;
+  openTerminal: (worktree: Worktree) => void;
+  launchAgent: (worktree: Worktree) => void;
 }
 
 export interface CommandContext {
@@ -80,14 +82,6 @@ export interface CommandContext {
   inspectorCollapsed: boolean;
   actions: CommandActions;
 }
-
-/**
- * Terminal and agent launching resolve in `lib/keymap.ts` but have no handler
- * yet (ROADMAP.md "Deferred UI wiring"). Listing them disabled answers the
- * search rather than returning nothing for "terminal".
- */
-export const TERMINAL_PENDING = "Release 0.0.5";
-export const AGENT_PENDING = "Release 0.0.6";
 
 const NEEDS_REPOSITORY = "Select a repository first";
 const NEEDS_WORKTREE = "Select a worktree first";
@@ -207,10 +201,14 @@ export function buildCommands(context: CommandContext): Command[] {
       id: "worktree.terminal",
       title: "Open in terminal",
       subtitle: worktreeName ?? NEEDS_WORKTREE,
-      keywords: "shell console launch",
+      keywords: "shell console launch warp",
       shortcut: "selection.open",
-      disabledReason: selectedWorktree ? TERMINAL_PENDING : NEEDS_WORKTREE,
-      run: () => {},
+      disabledReason: selectedWorktree ? undefined : NEEDS_WORKTREE,
+      run: () => {
+        if (selectedWorktree) {
+          actions.openTerminal(selectedWorktree);
+        }
+      },
     },
     {
       id: "worktree.agent",
@@ -218,8 +216,12 @@ export function buildCommands(context: CommandContext): Command[] {
       subtitle: worktreeName ?? NEEDS_WORKTREE,
       keywords: "claude codex ai coding",
       shortcut: "selection.agent",
-      disabledReason: selectedWorktree ? AGENT_PENDING : NEEDS_WORKTREE,
-      run: () => {},
+      disabledReason: selectedWorktree ? undefined : NEEDS_WORKTREE,
+      run: () => {
+        if (selectedWorktree) {
+          actions.launchAgent(selectedWorktree);
+        }
+      },
     },
     {
       id: "worktree.remove",

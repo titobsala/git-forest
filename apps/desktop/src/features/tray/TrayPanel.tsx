@@ -16,7 +16,7 @@ export interface TrayCounts {
   /** Worktrees with uncommitted changes. */
   dirty: number;
   /**
-   * Running agent sessions. Null until releases 0.0.6 / 0.0.8 provide session
+   * Running agent sessions. Null until release 0.0.8 provides session
    * tracking; rendered as "—" rather than a fabricated zero.
    */
   agents: number | null;

@@ -112,6 +112,23 @@ export interface RemoveWorktreeResult {
   worktrees: Worktree[];
 }
 
+export interface TerminalLaunchResult {
+  provider: TerminalProviderId;
+}
+
+export interface AgentAvailability {
+  id: AgentDefinitionId;
+  name: string;
+  command: string;
+  installed: boolean;
+}
+
+export interface AgentLaunchResult {
+  provider: TerminalProviderId;
+  agentId: AgentDefinitionId;
+  command: string;
+}
+
 export interface AgentDefinition {
   id: AgentDefinitionId;
   name: string;
@@ -196,7 +213,7 @@ export interface ImportRepositoriesResult {
 
 export const FALLBACK_APP_INFO: AppInfo = {
   name: "Git Forest",
-  version: "0.0.4",
+  version: "0.0.6",
   tagline: "Worktrees in reach.",
 };
 

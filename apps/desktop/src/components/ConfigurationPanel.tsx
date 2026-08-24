@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { detectAgents } from "../lib/agents";
 import type {
+  AgentAvailability,
   ForestConfiguration,
   ForestState,
   LaunchBehavior,
@@ -48,6 +50,7 @@ export function ConfigurationPanel({
   const persisted = state.configuration;
   const [configuration, setConfiguration] = useState(persisted);
   const synced = useRef(persisted);
+  const [availability, setAvailability] = useState<AgentAvailability[]>([]);
 
   /**
    * Re-seed the draft from the persisted configuration — except when the only
@@ -64,6 +67,24 @@ export function ConfigurationPanel({
         : persisted,
     );
   }, [persisted]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void detectAgents()
+      .then((next) => {
+        if (!cancelled) {
+          setAvailability(next);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailability([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -122,6 +143,16 @@ export function ConfigurationPanel({
             ))}
           </select>
         </label>
+
+        {availability.length > 0 ? (
+          <ul aria-label="Agent availability" className="stack">
+            {availability.map((agent) => (
+              <li key={agent.id} className="hint">
+                {agent.name} — {agent.installed ? "Installed" : "Missing"}
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <label className="field">
           <span>Worktree naming</span>

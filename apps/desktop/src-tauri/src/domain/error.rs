@@ -72,6 +72,14 @@ pub enum ForestError {
     EmptySlug,
     #[error("this worktree can only be removed with explicit force")]
     ForceRequired,
+    #[error("{0} is not available")]
+    TerminalUnavailable(String),
+    #[error("failed to launch the terminal: {0}")]
+    TerminalLaunchFailed(String),
+    #[error("the configured agent is not available: {0}")]
+    AgentUnavailable(String),
+    #[error("failed to launch the agent: {0}")]
+    AgentLaunchFailed(String),
 }
 
 impl From<rusqlite::Error> for ForestError {
@@ -137,6 +145,10 @@ impl From<ForestError> for CommandError {
             ForestError::PathOutsideForest => "path_outside_forest",
             ForestError::EmptySlug => "empty_slug",
             ForestError::ForceRequired => "force_required",
+            ForestError::TerminalUnavailable(_) => "terminal_unavailable",
+            ForestError::TerminalLaunchFailed(_) => "terminal_launch_failed",
+            ForestError::AgentUnavailable(_) => "agent_unavailable",
+            ForestError::AgentLaunchFailed(_) => "agent_launch_failed",
         };
 
         Self {
@@ -173,6 +185,26 @@ mod tests {
         assert_eq!(
             CommandError::from(ForestError::MissingRef("main".into())).code,
             "missing_ref"
+        );
+    }
+
+    #[test]
+    fn maps_terminal_and_agent_failures_to_stable_command_codes() {
+        assert_eq!(
+            CommandError::from(ForestError::TerminalUnavailable("Warp".into())).code,
+            "terminal_unavailable"
+        );
+        assert_eq!(
+            CommandError::from(ForestError::TerminalLaunchFailed("xdg-open failed".into())).code,
+            "terminal_launch_failed"
+        );
+        assert_eq!(
+            CommandError::from(ForestError::AgentUnavailable("codex".into())).code,
+            "agent_unavailable"
+        );
+        assert_eq!(
+            CommandError::from(ForestError::AgentLaunchFailed("missing tab config".into())).code,
+            "agent_launch_failed"
         );
     }
 }

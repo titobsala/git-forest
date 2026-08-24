@@ -6,8 +6,7 @@
  * and their disabled states are worth testing without a DOM.
  */
 
-import type { Repository } from "../../types/forest";
-import { AGENT_PENDING, TERMINAL_PENDING } from "./commands";
+import type { Repository, Worktree } from "../../types/forest";
 import type { LaunchResult } from "./results";
 import { score } from "./score";
 
@@ -29,6 +28,8 @@ export interface ActionContext {
   removeWorktree: (result: LaunchResult) => void;
   /** Routes to the repository browser, where removal is confirmed inline. */
   removeRepository: (repository: Repository) => void;
+  openTerminal: (worktree: Worktree) => void;
+  launchAgent: (worktree: Worktree) => void;
   /** False when the platform exposes no clipboard; the copy action is dropped. */
   canCopy: boolean;
 }
@@ -59,14 +60,20 @@ export function buildActions(
       {
         id: "terminal",
         title: "Open in terminal",
-        disabledReason: TERMINAL_PENDING,
-        run: () => {},
+        run: () => {
+          if (result.worktree) {
+            context.openTerminal(result.worktree);
+          }
+        },
       },
       {
         id: "agent",
         title: "Launch agent",
-        disabledReason: AGENT_PENDING,
-        run: () => {},
+        run: () => {
+          if (result.worktree) {
+            context.launchAgent(result.worktree);
+          }
+        },
       },
       {
         id: "remove",

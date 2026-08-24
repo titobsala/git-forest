@@ -112,4 +112,113 @@ describe("InspectorPanel", () => {
 
     expect(removeMock).toHaveBeenCalledWith("wt-2", false);
   });
+
+  it("force-removes a dirty worktree after the preview says force is required", async () => {
+    const user = userEvent.setup();
+    const dirty = sampleWorktree({
+      id: "wt-dirty",
+      name: "feat-dirty",
+      trackedChanges: 2,
+      untrackedFiles: 0,
+    });
+    previewMock.mockResolvedValueOnce({
+      worktree: dirty,
+      allowed: false,
+      requiresForce: true,
+      blockers: ["dirty"],
+    });
+    removeMock.mockResolvedValueOnce({
+      removed: true,
+      requiresForce: false,
+      blockers: [],
+      worktrees: [],
+    });
+
+    renderPanel(dirty);
+    await user.click(screen.getByRole("button", { name: "Remove worktree" }));
+
+    const region = await screen.findByRole("region", {
+      name: "Remove worktree",
+    });
+    expect(within(region).getByText(/Blocked: dirty/)).toBeTruthy();
+    expect(
+      within(region).queryByRole("button", { name: "Remove worktree" }),
+    ).toBeNull();
+
+    await user.click(
+      within(region).getByRole("button", { name: "Force remove" }),
+    );
+    expect(removeMock).toHaveBeenCalledWith("wt-dirty", true);
+  });
+
+  it("does not offer force removal for a primary worktree", async () => {
+    const user = userEvent.setup();
+    const primary = sampleWorktree({
+      id: "wt-primary",
+      name: "main",
+      isPrimary: true,
+    });
+    previewMock.mockResolvedValueOnce({
+      worktree: primary,
+      allowed: false,
+      requiresForce: false,
+      blockers: ["primary"],
+    });
+
+    renderPanel(primary);
+    await user.click(screen.getByRole("button", { name: "Remove worktree" }));
+
+    const region = await screen.findByRole("region", {
+      name: "Remove worktree",
+    });
+    expect(within(region).getByText(/Blocked: primary/)).toBeTruthy();
+    expect(
+      within(region).queryByRole("button", { name: "Force remove" }),
+    ).toBeNull();
+    expect(
+      within(region).queryByRole("button", { name: "Remove worktree" }),
+    ).toBeNull();
+  });
+
+  it("opens the worktree in the terminal from the inspector", async () => {
+    const user = userEvent.setup();
+    const onOpenTerminal = vi.fn();
+    render(
+      <InspectorPanel
+        repository={repository}
+        worktree={first}
+        configuration={FALLBACK_FOREST_STATE.configuration}
+        agentDefinitions={FALLBACK_FOREST_STATE.agentDefinitions}
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+        onWorktreesChanged={vi.fn()}
+        onRemoved={vi.fn()}
+        onOpenTerminal={onOpenTerminal}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open in warp" }));
+    expect(onOpenTerminal).toHaveBeenCalledWith(first);
+  });
+
+  it("launches the configured agent from the inspector", async () => {
+    const user = userEvent.setup();
+    const onLaunchAgent = vi.fn();
+    render(
+      <InspectorPanel
+        repository={repository}
+        worktree={first}
+        configuration={FALLBACK_FOREST_STATE.configuration}
+        agentDefinitions={FALLBACK_FOREST_STATE.agentDefinitions}
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+        onWorktreesChanged={vi.fn()}
+        onRemoved={vi.fn()}
+        onLaunchAgent={onLaunchAgent}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Launch Codex" }));
+    expect(onLaunchAgent).toHaveBeenCalledWith(first);
+  });
 });
