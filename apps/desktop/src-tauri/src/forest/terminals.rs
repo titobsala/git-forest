@@ -8,15 +8,12 @@ impl ForestService {
         &self,
         worktree_id: WorktreeId,
     ) -> Result<TerminalLaunchResult, ForestError> {
-        let worktree = self.require_worktree_summary(&worktree_id)?;
-        if !worktree.present {
-            return Err(ForestError::WorktreeMissing);
-        }
+        let path = self.require_worktree_launch_path(&worktree_id)?;
         let configuration = self.configuration()?;
         match configuration.default_terminal {
             TerminalProviderId::Warp => self
                 .terminals
-                .open_directory(&worktree.path, configuration.launch_behavior),
+                .open_directory(&path, configuration.launch_behavior),
         }
     }
 }
@@ -117,6 +114,32 @@ mod tests {
             .expect_err("missing");
         assert!(matches!(error, ForestError::WorktreeMissing));
         assert!(launcher.opened().is_empty());
+    }
+
+    #[test]
+    fn a_broken_sibling_worktree_does_not_block_opening_a_healthy_one() {
+        let env = TempEnv::new();
+        let launcher = FakeDesktopLauncher::with_binary("warp-terminal");
+        let (service, repository) = imported_repo(&env, warp(launcher.clone(), &env));
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/healthy".into(),
+                name: None,
+            })
+            .expect("create");
+        // Reconciling the repository would inspect this worktree too and fail.
+        std::fs::write(repository.path.join(".git/index"), "corrupt").expect("corrupt index");
+
+        service.open_worktree(created.worktree.id).expect("open");
+        assert_eq!(
+            launcher.opened(),
+            vec![warp_directory_uri(
+                &created.worktree.path,
+                LaunchBehavior::Auto
+            )]
+        );
     }
 
     #[test]

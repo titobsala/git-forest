@@ -132,6 +132,25 @@ impl ForestService {
         find_by_id(self.db.connection(), id)?.ok_or(ForestError::RepositoryNotFound)
     }
 
+    /// Resolve the directory a launch should open without reconciling the
+    /// repository.
+    ///
+    /// Reconciliation runs `git status` for every worktree of the repository,
+    /// so an unrelated broken worktree would block a healthy one from opening
+    /// and Quick Launch latency would grow with the tree count. A launch only
+    /// needs the stored path and proof that it still exists on disk.
+    pub(super) fn require_worktree_launch_path(
+        &self,
+        id: &WorktreeId,
+    ) -> Result<PathBuf, ForestError> {
+        let record =
+            find_worktree_by_id(self.db.connection(), id)?.ok_or(ForestError::WorktreeNotFound)?;
+        if !record.path.is_dir() {
+            return Err(ForestError::WorktreeMissing);
+        }
+        Ok(record.path)
+    }
+
     pub(super) fn require_worktree_summary(
         &self,
         id: &WorktreeId,

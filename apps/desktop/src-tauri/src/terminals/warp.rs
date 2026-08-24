@@ -55,11 +55,16 @@ impl WarpProvider {
         }
     }
 
+    /// Warp is only usable when it is installed *and* the launcher can hand a
+    /// `warp://` URI to the desktop. Every launch goes through the URI opener,
+    /// so reporting an installed Warp as available without it would turn a
+    /// detectable gap into a failure at launch time.
     fn detect(&self) -> bool {
-        WARP_BINARIES
+        let installed = WARP_BINARIES
             .iter()
             .any(|binary| self.launcher.executable_on_path(binary))
-            || self.launcher.uri_scheme_registered(WARP_SCHEME)
+            || self.launcher.uri_scheme_registered(WARP_SCHEME);
+        installed && self.launcher.can_open_uris()
     }
 
     fn prune_tab_configs(&self) -> Result<(), ForestError> {
@@ -199,14 +204,33 @@ fn render_tab_config(
     ))
 }
 
+/// Render a TOML basic string.
+///
+/// Paths and display names come from outside the app, so every character TOML
+/// forbids inside a basic string — the C0 control range and `DEL` — has to be
+/// escaped, not just the three common ones. An unescaped carriage return in a
+/// worktree path would otherwise emit a tab config Warp cannot parse while the
+/// URI dispatch still reports success.
 fn toml_string(value: &str) -> String {
-    format!(
-        "\"{}\"",
-        value
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-    )
+    let mut rendered = String::with_capacity(value.len() + 2);
+    rendered.push('"');
+    for character in value.chars() {
+        match character {
+            '\\' => rendered.push_str("\\\\"),
+            '"' => rendered.push_str("\\\""),
+            '\u{8}' => rendered.push_str("\\b"),
+            '\t' => rendered.push_str("\\t"),
+            '\n' => rendered.push_str("\\n"),
+            '\u{c}' => rendered.push_str("\\f"),
+            '\r' => rendered.push_str("\\r"),
+            character if character < '\u{20}' || character == '\u{7f}' => {
+                rendered.push_str(&format!("\\u{:04X}", character as u32));
+            }
+            character => rendered.push(character),
+        }
+    }
+    rendered.push('"');
+    rendered
 }
 
 fn percent_encode_path(value: &str) -> String {
@@ -224,7 +248,7 @@ fn percent_encode_path(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{warp_directory_uri, WarpProvider};
+    use super::{toml_string, warp_directory_uri, WarpProvider};
     use crate::domain::{AgentLaunchSpec, ForestError, LaunchBehavior};
     use crate::terminals::launcher::FakeDesktopLauncher;
     use crate::terminals::provider::TerminalProvider;
@@ -283,6 +307,37 @@ mod tests {
 
         let missing = available_provider(FakeDesktopLauncher::default(), env.path("tabs"));
         assert!(!missing.is_available().expect("missing"));
+    }
+
+    #[test]
+    fn an_installed_warp_without_a_uri_opener_is_unavailable() {
+        let env = crate::git::testing::TempGit::new();
+        let provider = available_provider(
+            FakeDesktopLauncher::with_binary("warp-terminal").without_uri_opener(),
+            env.path("tabs"),
+        );
+        assert!(!provider.is_available().expect("no opener"));
+
+        let error = provider
+            .open_directory(env.root(), LaunchBehavior::Auto)
+            .expect_err("unavailable");
+        assert!(matches!(
+            error,
+            ForestError::TerminalUnavailable(ref name) if name == "Warp"
+        ));
+    }
+
+    #[test]
+    fn toml_strings_escape_every_control_character() {
+        assert_eq!(toml_string("plain"), "\"plain\"");
+        assert_eq!(
+            toml_string("/tmp/we\rird\u{8}\u{c}\ttab\nline\"quoted\"\\back"),
+            "\"/tmp/we\\rird\\b\\f\\ttab\\nline\\\"quoted\\\"\\\\back\""
+        );
+        assert_eq!(
+            toml_string("bell\u{7}del\u{7f}"),
+            "\"bell\\u0007del\\u007F\""
+        );
     }
 
     #[test]

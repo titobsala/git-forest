@@ -22,15 +22,12 @@ impl ForestService {
         worktree_id: WorktreeId,
         agent_definition_id: Option<AgentDefinitionId>,
     ) -> Result<AgentLaunchResult, ForestError> {
-        let worktree = self.require_worktree_summary(&worktree_id)?;
-        if !worktree.present {
-            return Err(ForestError::WorktreeMissing);
-        }
+        let worktree_path = self.require_worktree_launch_path(&worktree_id)?;
         let configuration = self.configuration()?;
         let agent_id = agent_definition_id.unwrap_or(configuration.default_agent_id.clone());
         let definition = get_agent_definition(self.db.connection(), agent_id.as_str())?
             .ok_or_else(|| ForestError::UnknownAgent(agent_id.as_str().to_owned()))?;
-        let spec = launch_spec(self.executables.as_ref(), &definition, &worktree.path)?;
+        let spec = launch_spec(self.executables.as_ref(), &definition, &worktree_path)?;
         match configuration.default_terminal {
             TerminalProviderId::Warp => {
                 self.terminals

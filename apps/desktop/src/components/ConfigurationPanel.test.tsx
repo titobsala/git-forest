@@ -165,4 +165,28 @@ describe("ConfigurationPanel", () => {
     expect(list).toHaveTextContent("Codex — Installed");
     expect(list).toHaveTextContent("OpenCode — Missing");
   });
+
+  it("surfaces a detection failure instead of showing no agents", async () => {
+    vi.mocked(detectAgents).mockRejectedValue({
+      code: "database_unavailable",
+      message: "database is locked",
+    });
+
+    render(
+      <ConfigurationPanel
+        state={state}
+        busy={false}
+        onSave={vi.fn()}
+        onSelectTheme={vi.fn()}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Agent detection failed: database is locked",
+    );
+    expect(
+      screen.queryByRole("list", { name: "Agent availability" }),
+    ).not.toBeInTheDocument();
+  });
 });

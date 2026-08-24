@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { detectAgents } from "../lib/agents";
+import { errorMessage } from "../lib/errors";
 import type {
   AgentAvailability,
   ForestConfiguration,
@@ -51,6 +52,9 @@ export function ConfigurationPanel({
   const [configuration, setConfiguration] = useState(persisted);
   const synced = useRef(persisted);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(
+    null,
+  );
 
   /**
    * Re-seed the draft from the persisted configuration — except when the only
@@ -74,11 +78,14 @@ export function ConfigurationPanel({
       .then((next) => {
         if (!cancelled) {
           setAvailability(next);
+          setAvailabilityError(null);
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setAvailability([]);
+          // A detection failure is an operational error, not "no agents". Keep
+          // whatever the last successful detection reported and say what broke.
+          setAvailabilityError(errorMessage(error));
         }
       });
     return () => {
@@ -143,6 +150,12 @@ export function ConfigurationPanel({
             ))}
           </select>
         </label>
+
+        {availabilityError ? (
+          <p className="banner" role="alert">
+            Agent detection failed: {availabilityError}
+          </p>
+        ) : null}
 
         {availability.length > 0 ? (
           <ul aria-label="Agent availability" className="stack">

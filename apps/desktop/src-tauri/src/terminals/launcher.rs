@@ -9,13 +9,23 @@ pub trait DesktopLauncher: Send + Sync {
     fn executable_on_path(&self, name: &str) -> bool;
     fn uri_scheme_registered(&self, scheme: &str) -> bool;
     fn open_uri(&self, uri: &str) -> Result<(), ForestError>;
+
+    /// Whether this launcher can actually dispatch a URI right now.
+    ///
+    /// Availability checks call it so an installed terminal whose URI opener is
+    /// missing is reported as unavailable instead of failing at launch.
+    fn can_open_uris(&self) -> bool {
+        true
+    }
 }
+
+const URI_OPENER: &str = "xdg-open";
 
 pub struct SystemDesktopLauncher;
 
 impl SystemDesktopLauncher {
     pub(crate) fn build_open(uri: &str) -> Command {
-        let mut command = Command::new("xdg-open");
+        let mut command = Command::new(URI_OPENER);
         command
             .arg(uri)
             .stdin(Stdio::null())
@@ -28,6 +38,10 @@ impl SystemDesktopLauncher {
 impl DesktopLauncher for SystemDesktopLauncher {
     fn executable_on_path(&self, name: &str) -> bool {
         path_has_executable(name)
+    }
+
+    fn can_open_uris(&self) -> bool {
+        path_has_executable(URI_OPENER)
     }
 
     fn uri_scheme_registered(&self, scheme: &str) -> bool {
@@ -96,6 +110,7 @@ struct FakeInner {
     opened: Mutex<Vec<String>>,
     path_checks: Mutex<Vec<String>>,
     open_error: Mutex<Option<String>>,
+    uri_opener_missing: Mutex<bool>,
 }
 
 #[cfg(test)]
@@ -124,6 +139,12 @@ impl FakeDesktopLauncher {
             .expect("schemes")
             .push(scheme.to_owned());
         launcher
+    }
+
+    /// Simulate a desktop with no URI opener installed.
+    pub fn without_uri_opener(self) -> Self {
+        *self.inner.uri_opener_missing.lock().expect("uri opener") = true;
+        self
     }
 
     pub fn fail_open(self, message: &str) -> Self {
@@ -165,6 +186,10 @@ impl DesktopLauncher for FakeDesktopLauncher {
             .any(|registered| registered == scheme)
     }
 
+    fn can_open_uris(&self) -> bool {
+        !*self.inner.uri_opener_missing.lock().expect("uri opener")
+    }
+
     fn open_uri(&self, uri: &str) -> Result<(), ForestError> {
         if let Some(message) = self.inner.open_error.lock().expect("open error").clone() {
             return Err(ForestError::TerminalLaunchFailed(message));
@@ -187,7 +212,7 @@ mod tests {
         let command =
             SystemDesktopLauncher::build_open("warp://action/new_tab?path=/tmp/my%20worktree");
         let rendered = format!("{command:?}");
-        assert!(rendered.contains("xdg-open"));
+        assert!(rendered.contains(super::URI_OPENER));
         assert!(rendered.contains("warp://action/new_tab?path=/tmp/my%20worktree"));
         assert!(!rendered.contains("sh -c"));
         assert!(!rendered.contains("bash -c"));
