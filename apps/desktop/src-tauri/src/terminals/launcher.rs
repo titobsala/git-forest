@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use crate::domain::ForestError;
 
 pub trait DesktopLauncher: Send + Sync {
-    fn executable_on_path(&self, name: &str) -> bool;
     fn uri_scheme_registered(&self, scheme: &str) -> bool;
     fn open_uri(&self, uri: &str) -> Result<(), ForestError>;
 
@@ -36,10 +35,6 @@ impl SystemDesktopLauncher {
 }
 
 impl DesktopLauncher for SystemDesktopLauncher {
-    fn executable_on_path(&self, name: &str) -> bool {
-        path_has_executable(name)
-    }
-
     fn can_open_uris(&self) -> bool {
         path_has_executable(URI_OPENER)
     }
@@ -165,11 +160,8 @@ impl FakeDesktopLauncher {
             .expect("scheme checks")
             .len()
     }
-}
 
-#[cfg(test)]
-impl DesktopLauncher for FakeDesktopLauncher {
-    fn executable_on_path(&self, name: &str) -> bool {
+    pub fn executable_on_path(&self, name: &str) -> bool {
         self.inner
             .binaries
             .lock()
@@ -177,7 +169,10 @@ impl DesktopLauncher for FakeDesktopLauncher {
             .iter()
             .any(|binary| binary == name)
     }
+}
 
+#[cfg(test)]
+impl DesktopLauncher for FakeDesktopLauncher {
     fn uri_scheme_registered(&self, scheme: &str) -> bool {
         self.inner
             .scheme_checks

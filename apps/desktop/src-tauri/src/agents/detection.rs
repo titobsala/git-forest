@@ -28,13 +28,13 @@ pub fn detect_definition(
 #[cfg(test)]
 impl ExecutableLocator for crate::terminals::launcher::FakeDesktopLauncher {
     fn executable_on_path(&self, name: &str) -> bool {
-        crate::terminals::launcher::DesktopLauncher::executable_on_path(self, name)
+        crate::terminals::launcher::FakeDesktopLauncher::executable_on_path(self, name)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{detect_definition, ExecutableLocator};
+    use super::detect_definition;
     use crate::domain::{AgentDefinition, AgentDefinitionId};
     use crate::terminals::launcher::FakeDesktopLauncher;
 
