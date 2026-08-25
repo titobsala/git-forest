@@ -10,6 +10,7 @@
 
 export type ShortcutId =
   | "launcher.toggle"
+  | "launcher.global"
   | "launcher.actions"
   | "view.cockpit"
   | "overlay.close"
@@ -33,16 +34,26 @@ export interface ShortcutBinding {
   mod?: boolean;
   alt?: boolean;
   shift?: boolean;
+  /** Shown in labels only; never resolved from a key event. */
+  displayOnly?: boolean;
 }
 
 export const SHORTCUTS: readonly ShortcutBinding[] = [
   {
     id: "launcher.toggle",
     scope: "global",
-    label: "Cmd K",
+    label: "Super W / Cmd K",
     description: "Toggle Quick Launch overlay",
     key: "k",
     mod: true,
+  },
+  {
+    id: "launcher.global",
+    scope: "global",
+    label: "Super W",
+    description: "OS-global Quick Launch toggle",
+    key: "w",
+    displayOnly: true,
   },
   {
     id: "view.cockpit",
@@ -125,6 +136,9 @@ interface KeyEventLike {
 }
 
 function matches(binding: ShortcutBinding, event: KeyEventLike): boolean {
+  if (binding.displayOnly) {
+    return false;
+  }
   if (event.key.toLowerCase() !== binding.key.toLowerCase()) {
     return false;
   }

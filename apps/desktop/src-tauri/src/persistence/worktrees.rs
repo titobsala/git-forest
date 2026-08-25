@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::settings::parse_rfc3339;
@@ -12,8 +13,9 @@ pub struct WorktreeRecord {
     pub name: String,
     pub path: std::path::PathBuf,
     pub branch: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
 }
 
 pub fn list_by_repository(
@@ -21,7 +23,7 @@ pub fn list_by_repository(
     repository_id: &RepositoryId,
 ) -> Result<Vec<WorktreeRecord>, ForestError> {
     let mut statement = conn.prepare(
-        "SELECT id, repository_id, name, path, branch, created_at, updated_at
+        "SELECT id, repository_id, name, path, branch, created_at, updated_at, last_used_at
          FROM worktrees
          WHERE repository_id = ?1
          ORDER BY name COLLATE NOCASE, path",
@@ -40,7 +42,7 @@ pub fn find_by_repository_and_path(
     path: &Path,
 ) -> Result<Option<WorktreeRecord>, ForestError> {
     conn.query_row(
-        "SELECT id, repository_id, name, path, branch, created_at, updated_at
+        "SELECT id, repository_id, name, path, branch, created_at, updated_at, last_used_at
          FROM worktrees
          WHERE repository_id = ?1 AND path = ?2",
         params![repository_id.as_str(), path.to_string_lossy().as_ref()],
@@ -53,8 +55,10 @@ pub fn find_by_repository_and_path(
 
 pub fn upsert_worktree(conn: &Connection, record: &WorktreeRecord) -> Result<(), ForestError> {
     conn.execute(
-        "INSERT INTO worktrees (id, repository_id, name, path, branch, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO worktrees (
+            id, repository_id, name, path, branch, created_at, updated_at, last_used_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(repository_id, path) DO UPDATE SET
             name = excluded.name,
             branch = excluded.branch,
@@ -66,9 +70,25 @@ pub fn upsert_worktree(conn: &Connection, record: &WorktreeRecord) -> Result<(),
             record.path.to_string_lossy().as_ref(),
             record.branch,
             record.created_at.to_rfc3339(),
-            record.updated_at.to_rfc3339()
+            record.updated_at.to_rfc3339(),
+            record.last_used_at.map(|value| value.to_rfc3339())
         ],
     )?;
+    Ok(())
+}
+
+pub fn touch_worktree_used(
+    conn: &Connection,
+    id: &WorktreeId,
+    at: DateTime<Utc>,
+) -> Result<(), ForestError> {
+    let changed = conn.execute(
+        "UPDATE worktrees SET last_used_at = ?1 WHERE id = ?2",
+        params![at.to_rfc3339(), id.as_str()],
+    )?;
+    if changed == 0 {
+        return Err(ForestError::WorktreeNotFound);
+    }
     Ok(())
 }
 
@@ -82,7 +102,7 @@ pub fn find_by_id(
     id: &WorktreeId,
 ) -> Result<Option<WorktreeRecord>, ForestError> {
     conn.query_row(
-        "SELECT id, repository_id, name, path, branch, created_at, updated_at
+        "SELECT id, repository_id, name, path, branch, created_at, updated_at, last_used_at
          FROM worktrees
          WHERE id = ?1",
         [id.as_str()],
@@ -114,6 +134,7 @@ type WorktreeRow = (
     Option<String>,
     String,
     String,
+    Option<String>,
 );
 
 fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorktreeRow> {
@@ -125,11 +146,12 @@ fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorktreeRow> {
         row.get(4)?,
         row.get(5)?,
         row.get(6)?,
+        row.get(7)?,
     ))
 }
 
 fn map_record(
-    (id, repository_id, name, path, branch, created_at, updated_at): WorktreeRow,
+    (id, repository_id, name, path, branch, created_at, updated_at, last_used_at): WorktreeRow,
 ) -> Result<WorktreeRecord, ForestError> {
     Ok(WorktreeRecord {
         id: WorktreeId::from_string(id),
@@ -139,5 +161,98 @@ fn map_record(
         branch,
         created_at: parse_rfc3339(&created_at)?,
         updated_at: parse_rfc3339(&updated_at)?,
+        last_used_at: last_used_at.as_deref().map(parse_rfc3339).transpose()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_by_id, touch_worktree_used, upsert_worktree, WorktreeRecord};
+    use crate::domain::{RepositoryId, WorktreeId};
+    use crate::persistence::Database;
+    use chrono::{TimeZone, Utc};
+    use std::path::{Path, PathBuf};
+
+    fn open_migrated(root: &Path) -> Database {
+        let db = Database::open(&root.join("forest.db")).expect("open");
+        db.migrate().expect("migrate");
+        db
+    }
+
+    fn seed_repository(db: &Database) {
+        db.connection()
+            .execute(
+                "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
+                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                [],
+            )
+            .expect("seed repo");
+    }
+
+    fn record(last_used_at: Option<chrono::DateTime<Utc>>) -> WorktreeRecord {
+        let created = Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap();
+        WorktreeRecord {
+            id: WorktreeId::from_string("wt-1"),
+            repository_id: RepositoryId::from_string("repo-1"),
+            name: "feat-risk-483".into(),
+            path: PathBuf::from("/tmp/feat-risk-483"),
+            branch: Some("feat/risk-483".into()),
+            created_at: created,
+            updated_at: created,
+            last_used_at,
+        }
+    }
+
+    #[test]
+    fn round_trips_last_used_at() {
+        let root = std::env::temp_dir().join(format!("git-forest-wt-{}", uuid::Uuid::new_v4()));
+        let db = open_migrated(&root);
+        seed_repository(&db);
+        let used = Utc.with_ymd_and_hms(2026, 8, 25, 10, 0, 0).unwrap();
+        upsert_worktree(db.connection(), &record(Some(used))).expect("insert");
+
+        let loaded = find_by_id(db.connection(), &WorktreeId::from_string("wt-1"))
+            .expect("find")
+            .expect("present");
+        assert_eq!(loaded.last_used_at, Some(used));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn upsert_preserves_last_used_at() {
+        let root = std::env::temp_dir().join(format!("git-forest-wt-{}", uuid::Uuid::new_v4()));
+        let db = open_migrated(&root);
+        seed_repository(&db);
+        let used = Utc.with_ymd_and_hms(2026, 8, 25, 10, 0, 0).unwrap();
+        upsert_worktree(db.connection(), &record(Some(used))).expect("insert");
+
+        let mut next = record(None);
+        next.name = "renamed".into();
+        next.updated_at = Utc.with_ymd_and_hms(2026, 8, 25, 11, 0, 0).unwrap();
+        upsert_worktree(db.connection(), &next).expect("update");
+
+        let loaded = find_by_id(db.connection(), &WorktreeId::from_string("wt-1"))
+            .expect("find")
+            .expect("present");
+        assert_eq!(loaded.name, "renamed");
+        assert_eq!(loaded.last_used_at, Some(used));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn touch_records_usage_time() {
+        let root = std::env::temp_dir().join(format!("git-forest-wt-{}", uuid::Uuid::new_v4()));
+        let db = open_migrated(&root);
+        seed_repository(&db);
+        upsert_worktree(db.connection(), &record(None)).expect("insert");
+        let used = Utc.with_ymd_and_hms(2026, 8, 25, 12, 0, 0).unwrap();
+        touch_worktree_used(db.connection(), &WorktreeId::from_string("wt-1"), used)
+            .expect("touch");
+
+        let loaded = find_by_id(db.connection(), &WorktreeId::from_string("wt-1"))
+            .expect("find")
+            .expect("present");
+        assert_eq!(loaded.last_used_at, Some(used));
+        let _ = std::fs::remove_dir_all(root);
+    }
 }

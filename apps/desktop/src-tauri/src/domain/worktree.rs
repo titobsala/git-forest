@@ -39,6 +39,7 @@ pub struct Worktree {
     pub behind: Option<u32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
 }
 
 impl Worktree {
@@ -117,6 +118,7 @@ mod tests {
             behind: Some(0),
             created_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
+            last_used_at: None,
         };
 
         let json = serde_json::to_value(&worktree).expect("serialize");
@@ -127,6 +129,7 @@ mod tests {
         assert_eq!(json["trackedChanges"], 1);
         assert_eq!(json["untrackedFiles"], 2);
         assert_eq!(json["isPrimary"], false);
+        assert_eq!(json["lastUsedAt"], serde_json::Value::Null);
         assert_eq!(
             serde_json::to_value(RemovalBlocker::Dirty).unwrap(),
             "dirty"

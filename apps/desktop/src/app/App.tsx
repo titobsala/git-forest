@@ -18,8 +18,10 @@ import { QuickLaunch } from "../features/launcher/QuickLaunch";
 import { SettingsView } from "../features/settings/SettingsView";
 import { TrayIndicator } from "../features/tray/TrayIndicator";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useGlobalLauncherShortcut } from "../hooks/useGlobalLauncherShortcut";
 import { useTheme } from "../hooks/useTheme";
 import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
+import { useAgentSessions } from "../hooks/useAgentSessions";
 import { clipboardAvailable, copyText } from "../lib/clipboard";
 import { errorMessage } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
@@ -83,6 +85,7 @@ export function App() {
   );
 
   const index = useWorktreeIndex(state.repositories, { paused: busy });
+  const sessions = useAgentSessions();
 
   useTheme(state.configuration.theme);
 
@@ -114,6 +117,11 @@ export function App() {
     "launcher.toggle": () => setLauncherOpen((current) => !current),
     "view.cockpit": () => setView("cockpit"),
     "overlay.close": () => setLauncherOpen(false),
+  });
+
+  useGlobalLauncherShortcut({
+    launcherOpen,
+    setLauncherOpen,
   });
 
   async function runMutation(operation: () => Promise<ForestState>) {
@@ -201,7 +209,10 @@ export function App() {
 
   async function handleOpenTerminal(worktree: Worktree) {
     try {
-      await openWorktreeInTerminal(worktree.id);
+      const result = await openWorktreeInTerminal(worktree.id);
+      if (result.lastUsedAt) {
+        index.touchWorktree(worktree.id, result.lastUsedAt);
+      }
       setError(null);
     } catch (caught: unknown) {
       setError(errorMessage(caught));
@@ -210,7 +221,11 @@ export function App() {
 
   async function handleLaunchAgent(worktree: Worktree) {
     try {
-      await launchAgent(worktree.id);
+      const result = await launchAgent(worktree.id);
+      if (result.lastUsedAt) {
+        index.touchWorktree(worktree.id, result.lastUsedAt);
+      }
+      await sessions.refresh();
       setError(null);
     } catch (caught: unknown) {
       setError(errorMessage(caught));
@@ -319,10 +334,9 @@ export function App() {
     () => ({
       worktrees: index.flat.length,
       dirty: index.flat.filter((row) => isDirty(row.worktree)).length,
-      // Live agent sessions arrive in release 0.0.8.
-      agents: null,
+      agents: sessions.activeCount,
     }),
-    [index.flat],
+    [index.flat, sessions.activeCount],
   );
 
   if (status === "loading") {
@@ -399,6 +413,11 @@ export function App() {
           onLaunchAgent={(worktree) => {
             void handleLaunchAgent(worktree);
           }}
+          session={
+            selectedWorktree
+              ? sessions.primarySession(selectedWorktree.id)
+              : null
+          }
         />
       }
       overlays={
@@ -414,9 +433,9 @@ export function App() {
               selectRepository(repository.id);
               setView("cockpit");
             }}
-            onOpenWorktree={(worktree, repository) => {
+            onOpenWorktreeInTerminal={(worktree, repository) => {
               selectWorktree(worktree, repository);
-              setView("cockpit");
+              void handleOpenTerminal(worktree);
             }}
           />
           {creatingIn ? (
@@ -452,11 +471,17 @@ export function App() {
           onLaunchAgent={(worktree) => {
             void handleLaunchAgent(worktree);
           }}
+          hasActiveSession={(worktree) =>
+            sessions.hasActiveSession(worktree.id)
+          }
+          primarySession={(worktreeId) => sessions.primarySession(worktreeId)}
         />
       ) : view === "agents" ? (
         <AgentMonitorView
           agentDefinitions={state.agentDefinitions}
           configuration={state.configuration}
+          sessions={sessions.sessions}
+          worktrees={index.flat}
         />
       ) : (
         <SettingsView

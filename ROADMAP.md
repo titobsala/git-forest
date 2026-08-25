@@ -5,7 +5,7 @@
 Current implementation:
 
 ```text
-Release 0.0.6
+Release 0.0.8
 ```
 
 Completed:
@@ -17,15 +17,17 @@ Completed:
 0.0.4 Git worktree lifecycle
 0.0.5 Terminal Provider System
 0.0.6 Agent Runner System
+0.0.7 Quick Launcher
+0.0.8 Sessions & Process Tracking
 ```
 
 Next:
 
 ```text
-0.0.7 Quick Launcher
+0.0.9 Safety, Reconciliation & Cleanup
 ```
 
-The 1.0 release remains the first complete local MVP. `WorkspaceSession` from the original 0.0.2 type list is deferred to Release 0.0.8 (Sessions & Process Tracking).
+The 1.0 release remains the first complete local MVP. `WorkspaceSession` from the original 0.0.2 type list is **not** part of Release 0.0.8; that release tracks `AgentSession` only. Generic terminal/editor activity remains unscheduled.
 
 This roadmap deliberately separates **foundational correctness** from richer integrations and future orchestration features.
 
@@ -33,17 +35,12 @@ This roadmap deliberately separates **foundational correctness** from richer int
 
 ## Deferred UI wiring
 
-The desktop UI was built ahead of the backend against `docs/design.md`. The three interaction surfaces (Quick Launcher, Cockpit, Tray) exist today. Terminal open and agent launch are live as of releases 0.0.5 and 0.0.6. The components below are still inert because no command feeds them yet.
+The desktop UI was built ahead of the backend against `docs/design.md`. The three interaction surfaces (Quick Launcher, Cockpit, Tray) exist today. Terminal open, agent launch, global Quick Launch, and live `AgentSession` tracking are wired. The components below are still inert because no command feeds them yet.
 
 They are complete markup and styling. Landing the release listed against each one should be a wiring change, not a design change.
 
 | Component | File | Waiting on |
 | --- | --- | --- |
-| `AgentBadge` | `components/deferred/AgentBadge.tsx` | 0.0.8 — pass a real `AgentSession` instead of `null` |
-| Cockpit "Agents" filter pill | `features/cockpit/filters.ts` | 0.0.8 — supply the `hasAgentSession` predicate |
-| Agent monitor "Running sessions" | `features/agents/AgentMonitorView.tsx` | 0.0.8 — replace the placeholder with the session list |
-| `TrayPanel` active-agent count | `features/tray/TrayPanel.tsx` | 0.0.8 — replace `counts.agents: null` |
-| `Super + W` global shortcut | `features/launcher/QuickLaunch.tsx` | 0.0.7 — Tauri global-shortcut plugin plus window show/hide; the overlay opens on `Cmd/Ctrl+K` today |
 | Native system tray | `features/tray/TrayPanel.tsx` | 0.5.0 — the panel body becomes the native menu |
 | `StashPill` | `components/deferred/StashPill.tsx` | **unscheduled** — `Worktree` has no `stashCount` and `git/status.rs` does not read the stash reflog. `docs/design.md` section 4.1 specifies the badge; a release needs to claim it |
 
@@ -488,7 +485,7 @@ Both frontend and Rust checks pass.
 
 Status: **complete**.
 
-`WorkspaceSession` is not implemented here; it belongs to Release 0.0.8.
+`WorkspaceSession` is not implemented here; generic terminal/editor activity remains unscheduled. `AgentSession` persistence and Linux `/proc` reconciliation landed in Release 0.0.8.
 
 ## Goal
 
@@ -978,7 +975,7 @@ If Warp is already in use, Forest opens the workspace as a new tab rather than n
 
 Status: **complete**.
 
-Forest detects the seeded Codex, Claude Code, OpenCode, and Cursor CLI executables on `PATH` and launches the configured default (or an explicit built-in) through Warp Tab Configs prefixed `git-forest-`. Arguments stay structured until a tested encoder produces Warp's command string; worktree paths are Warp's `directory` field, never interpolated. Session persistence, live process reconciliation, custom-agent management, `AgentBadge`, the Agents filter, and tray session counts remain Release 0.0.8. See [0005. Agent runner interface](docs/decisions/0005-agent-runner-interface.md).
+Forest detects the seeded Codex, Claude Code, OpenCode, and Cursor CLI executables on `PATH` and launches the configured default (or an explicit built-in) through Warp Tab Configs prefixed `git-forest-`. Arguments stay structured until a tested encoder produces Warp's command string; worktree paths are Warp's `directory` field, never interpolated. Session persistence and live process reconciliation landed in Release 0.0.8. Custom-agent management remains later. See [0005. Agent runner interface](docs/decisions/0005-agent-runner-interface.md).
 
 ## Goal
 
@@ -1089,7 +1086,9 @@ inside any Forest worktree using Warp.
 
 # Release 0.0.7 — Quick Launcher
 
-> **UI already built.** `features/launcher/QuickLaunch.tsx` implements the overlay, search, ranking (`results.ts`) and keyhints. This release adds the OS-global `Super + W` binding and window show/hide; the overlay currently opens on `Cmd/Ctrl+K` and from the L1 rail. See "Deferred UI wiring".
+Status: **complete**.
+
+`Super + W` is registered natively via `tauri-plugin-global-shortcut`. When Forest is hidden, minimized, or unfocused it shows, focuses, and opens Quick Launch; when the overlay is already open it closes and hides the window. `Ctrl/Cmd + K` remains the in-app toggle and does not hide Forest. If the desktop environment already owns `Super + W`, registration fails with a log line and `Ctrl/Cmd + K` still works. Launcher Enter on a worktree opens Warp; repository Enter still reveals the cockpit. Successful `open_worktree` and `launch_agent` calls persist `worktrees.last_used_at` (schema version 3) and use it as a ranking tie-break.
 
 ## Goal
 
@@ -1193,6 +1192,10 @@ This should be the first release where the intended product experience is clearl
 ---
 
 # Release 0.0.8 — Sessions & Process Tracking
+
+Status: **complete**.
+
+Agent launches persist an `AgentSession` (schema version 4, `process_start_ticks`). Linux `/proc` matching uses canonical worktree cwd plus the agent command basename (executable, argv0, or a wrapper token). A pre-dispatch snapshot excludes processes already running in that worktree; PID reuse is rejected unless start ticks match. Status is approximate: `running`, `exited`, `unknown`, or `failed`. `starting` and `running` are the only active states for badges, the Agents filter, tray counts, and removal blockers. `WorkspaceSession` is not implemented. See [0006. Linux agent process reconciliation](docs/decisions/0006-linux-agent-process-reconciliation.md).
 
 > Launching Codex, Claude Code, and OpenCode through Warp is complete in 0.0.6. This release adds persistent session metadata, OS process reconciliation, `AgentBadge`, the Agents filter, the monitor list, and tray counts.
 
@@ -2243,15 +2246,15 @@ Dirty work is never silently destroyed.
 
 ## Quick Launcher
 
-* [ ] Global shortcut.
-* [ ] Immediate focus.
-* [ ] Fuzzy search.
-* [ ] Keyboard result navigation.
-* [ ] Open action.
-* [ ] New worktree action.
-* [ ] Agent action.
-* [ ] Remove action.
-* [ ] Escape to hide.
+* [x] Global shortcut.
+* [x] Immediate focus.
+* [x] Fuzzy search.
+* [x] Keyboard result navigation.
+* [x] Open action.
+* [x] New worktree action.
+* [x] Agent action.
+* [x] Remove action.
+* [x] Escape to hide.
 
 ## Cockpit
 

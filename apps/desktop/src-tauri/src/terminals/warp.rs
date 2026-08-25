@@ -125,6 +125,7 @@ impl TerminalProvider for WarpProvider {
             .open_uri(&warp_directory_uri(path, behavior))?;
         Ok(TerminalLaunchResult {
             provider: TerminalProviderId::Warp,
+            last_used_at: None,
         })
     }
 
@@ -155,6 +156,7 @@ impl TerminalProvider for WarpProvider {
         }
         Ok(TerminalLaunchResult {
             provider: TerminalProviderId::Warp,
+            last_used_at: None,
         })
     }
 }

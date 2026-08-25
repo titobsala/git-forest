@@ -3,6 +3,7 @@ import type {
   AgentAvailability,
   AgentDefinitionId,
   AgentLaunchResult,
+  AgentSession,
   WorktreeId,
 } from "../types/forest";
 
@@ -18,4 +19,8 @@ export async function launchAgent(
     worktreeId,
     agentDefinitionId: agentDefinitionId ?? null,
   });
+}
+
+export async function listAgentSessions(): Promise<AgentSession[]> {
+  return invokeCommand<AgentSession[]>("list_agent_sessions");
 }

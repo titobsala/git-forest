@@ -16,10 +16,9 @@ export interface TrayCounts {
   /** Worktrees with uncommitted changes. */
   dirty: number;
   /**
-   * Running agent sessions. Null until release 0.0.8 provides session
-   * tracking; rendered as "—" rather than a fabricated zero.
+   * Running agent sessions (`starting` and `running`).
    */
-  agents: number | null;
+  agents: number;
 }
 
 interface TrayPanelProps {
@@ -55,10 +54,7 @@ export function TrayPanel({
       <div className="border-b border-card-border py-1">
         <Row label="Worktrees" value={String(counts.worktrees)} />
         <Row label="Dirty" value={String(counts.dirty)} />
-        <Row
-          label="Active agents"
-          value={counts.agents === null ? "—" : String(counts.agents)}
-        />
+        <Row label="Active agents" value={String(counts.agents)} />
       </div>
 
       <div className="flex flex-col py-1">

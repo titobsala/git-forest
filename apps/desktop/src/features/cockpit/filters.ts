@@ -35,9 +35,8 @@ export function worktreeMatches(worktree: Worktree, query: string): boolean {
 /**
  * Status pill predicate.
  *
- * AWAITING BACKEND: "agents" needs agent sessions (release 0.0.8).
- * Until `hasAgentSession` is supplied it resolves to false, so the pill
- * correctly yields an empty result rather than a fabricated one.
+ * The Agents pill keeps worktrees that currently have a starting or running
+ * session. Callers supply `hasAgentSession` from live session state.
  */
 export function matchesFilter(
   worktree: Worktree,

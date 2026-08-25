@@ -10,11 +10,13 @@ impl ForestService {
     ) -> Result<TerminalLaunchResult, ForestError> {
         let path = self.require_worktree_launch_path(&worktree_id)?;
         let configuration = self.configuration()?;
-        match configuration.default_terminal {
+        let mut result = match configuration.default_terminal {
             TerminalProviderId::Warp => self
                 .terminals
-                .open_directory(&path, configuration.launch_behavior),
-        }
+                .open_directory(&path, configuration.launch_behavior)?,
+        };
+        result.last_used_at = Some(self.touch_worktree_used(&worktree_id)?);
+        Ok(result)
     }
 }
 
@@ -73,6 +75,67 @@ mod tests {
                 LaunchBehavior::Auto
             )]
         );
+    }
+
+    #[test]
+    fn successful_open_records_last_used_at() {
+        let env = TempEnv::new();
+        let launcher = FakeDesktopLauncher::with_scheme("warp");
+        let (service, repository) = imported_repo(&env, warp(launcher, &env));
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/recent".into(),
+                name: None,
+            })
+            .expect("create");
+        assert_eq!(created.worktree.last_used_at, None);
+        let before = chrono::Utc::now();
+
+        let result = service
+            .open_worktree(created.worktree.id.clone())
+            .expect("open");
+        let used = result.last_used_at.expect("timestamp");
+        assert!(used >= before);
+        let record = crate::persistence::find_worktree_by_id(
+            service.db_connection_for_test(),
+            &created.worktree.id,
+        )
+        .expect("find")
+        .expect("present");
+        assert_eq!(record.last_used_at, Some(used));
+        let listed = service.list_worktrees(record.repository_id).expect("list");
+        let listed = listed
+            .iter()
+            .find(|item| item.id == created.worktree.id)
+            .expect("listed");
+        assert_eq!(listed.last_used_at, Some(used));
+    }
+
+    #[test]
+    fn failed_open_does_not_record_last_used_at() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env, warp(FakeDesktopLauncher::default(), &env));
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/no-use".into(),
+                name: None,
+            })
+            .expect("create");
+
+        service
+            .open_worktree(created.worktree.id.clone())
+            .expect_err("unavailable");
+        let record = crate::persistence::find_worktree_by_id(
+            service.db_connection_for_test(),
+            &created.worktree.id,
+        )
+        .expect("find")
+        .expect("present");
+        assert_eq!(record.last_used_at, None);
     }
 
     #[test]

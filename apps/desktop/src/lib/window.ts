@@ -47,3 +47,50 @@ export async function startWindowDrag(): Promise<void> {
 export async function startWindowResize(edge: ResizeEdge): Promise<void> {
   await currentWindow()?.startResizeDragging(edge);
 }
+
+export async function showWindow(): Promise<void> {
+  await currentWindow()?.show();
+}
+
+export async function hideWindow(): Promise<void> {
+  await currentWindow()?.hide();
+}
+
+export async function focusWindow(): Promise<void> {
+  await currentWindow()?.setFocus();
+}
+
+export async function unminimizeWindow(): Promise<void> {
+  const window = currentWindow();
+  if (!window) {
+    return;
+  }
+  if (await window.isMinimized()) {
+    await window.unminimize();
+  }
+}
+
+/** Missing native window: treat the UI as visible for browser/test hosts. */
+export async function isWindowVisible(): Promise<boolean> {
+  const window = currentWindow();
+  if (!window) {
+    return true;
+  }
+  return window.isVisible();
+}
+
+export async function isWindowMinimized(): Promise<boolean> {
+  const window = currentWindow();
+  if (!window) {
+    return false;
+  }
+  return window.isMinimized();
+}
+
+export async function isWindowFocused(): Promise<boolean> {
+  const window = currentWindow();
+  if (!window) {
+    return true;
+  }
+  return window.isFocused();
+}

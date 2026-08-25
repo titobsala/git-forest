@@ -7,6 +7,8 @@
 
 import { useEffect } from "react";
 import type {
+  AgentDefinitionId,
+  AgentSession,
   Repository,
   RepositoryId,
   Worktree,
@@ -34,6 +36,8 @@ interface RepositoryGroupProps {
   agentName: string;
   onOpenTerminal?: (worktree: Worktree) => void;
   onLaunchAgent?: (worktree: Worktree) => void;
+  sessionFor?: (worktreeId: WorktreeId) => AgentSession | null;
+  agentNameFor?: (agentId: AgentDefinitionId) => string;
 }
 
 export function RepositoryGroup({
@@ -52,6 +56,8 @@ export function RepositoryGroup({
   agentName,
   onOpenTerminal,
   onLaunchAgent,
+  sessionFor,
+  agentNameFor,
 }: RepositoryGroupProps) {
   useEffect(() => {
     if (!collapsed) {
@@ -117,25 +123,35 @@ export function RepositoryGroup({
                 : "No worktrees match the current filter."}
             </p>
           ) : (
-            worktrees.map((worktree, index) => (
-              <WorktreeRow
-                key={worktree.id}
-                worktree={worktree}
-                index={index}
-                total={worktrees.length}
-                selected={worktree.id === selectedWorktreeId}
-                tabbable={worktree.id === activeWorktreeId}
-                onSelect={() => onSelectWorktree(worktree, repository)}
-                terminalName={terminalName}
-                agentName={agentName}
-                onOpenTerminal={
-                  onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
-                }
-                onLaunchAgent={
-                  onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
-                }
-              />
-            ))
+            worktrees.map((worktree, index) => {
+              const session = sessionFor?.(worktree.id) ?? null;
+              return (
+                <WorktreeRow
+                  key={worktree.id}
+                  worktree={worktree}
+                  index={index}
+                  total={worktrees.length}
+                  selected={worktree.id === selectedWorktreeId}
+                  tabbable={worktree.id === activeWorktreeId}
+                  onSelect={() => onSelectWorktree(worktree, repository)}
+                  terminalName={terminalName}
+                  agentName={agentName}
+                  session={session}
+                  sessionAgentName={
+                    session
+                      ? (agentNameFor?.(session.agentDefinitionId) ??
+                        session.agentDefinitionId)
+                      : undefined
+                  }
+                  onOpenTerminal={
+                    onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
+                  }
+                  onLaunchAgent={
+                    onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
+                  }
+                />
+              );
+            })
           )}
         </div>
       )}

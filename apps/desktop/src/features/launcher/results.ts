@@ -90,7 +90,52 @@ export function buildResults(
   }
 
   return candidates
-    .sort((left, right) => left.rank - right.rank)
+    .sort(compareCandidates)
     .slice(0, MAX_RESULTS)
     .map((candidate) => candidate.result);
+}
+
+function compareRecencyDesc(left: string | null, right: string | null): number {
+  if (left === right) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return right.localeCompare(left);
+}
+
+function compareCandidates(
+  left: { result: LaunchResult; rank: number },
+  right: { result: LaunchResult; rank: number },
+): number {
+  const rankDelta = left.rank - right.rank;
+  if (rankDelta !== 0) {
+    return rankDelta;
+  }
+
+  const leftWorktree = left.result.worktree;
+  const rightWorktree = right.result.worktree;
+  if (leftWorktree && rightWorktree) {
+    const recency = compareRecencyDesc(
+      leftWorktree.lastUsedAt,
+      rightWorktree.lastUsedAt,
+    );
+    if (recency !== 0) {
+      return recency;
+    }
+  }
+
+  const title = left.result.title.localeCompare(right.result.title);
+  if (title !== 0) {
+    return title;
+  }
+  const subtitle = left.result.subtitle.localeCompare(right.result.subtitle);
+  if (subtitle !== 0) {
+    return subtitle;
+  }
+  return left.result.id.localeCompare(right.result.id);
 }

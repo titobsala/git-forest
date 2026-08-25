@@ -38,7 +38,7 @@ function setup(overrides: { actions?: Partial<CommandActions> } = {}) {
 
   const onClose = vi.fn();
   const onOpenRepository = vi.fn();
-  const onOpenWorktree = vi.fn();
+  const onOpenWorktreeInTerminal = vi.fn();
 
   render(
     <QuickLaunch
@@ -57,11 +57,17 @@ function setup(overrides: { actions?: Partial<CommandActions> } = {}) {
       })}
       actionContext={actionContext}
       onOpenRepository={onOpenRepository}
-      onOpenWorktree={onOpenWorktree}
+      onOpenWorktreeInTerminal={onOpenWorktreeInTerminal}
     />,
   );
 
-  return { actions, actionContext, onClose, onOpenRepository, onOpenWorktree };
+  return {
+    actions,
+    actionContext,
+    onClose,
+    onOpenRepository,
+    onOpenWorktreeInTerminal,
+  };
 }
 
 describe("QuickLaunch", () => {
@@ -190,5 +196,29 @@ describe("QuickLaunch", () => {
       screen.getByRole("listbox", { name: "Results" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveFocus();
+  });
+
+  it("opens the selected worktree in the terminal on Enter", async () => {
+    const user = userEvent.setup();
+    const { onOpenWorktreeInTerminal, onOpenRepository, onClose } = setup();
+
+    await user.keyboard("risk-483");
+    await user.keyboard("{Enter}");
+
+    expect(onOpenWorktreeInTerminal).toHaveBeenCalledWith(worktree, repository);
+    expect(onOpenRepository).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("reveals the selected repository in the cockpit on Enter", async () => {
+    const user = userEvent.setup();
+    const { onOpenRepository, onOpenWorktreeInTerminal, onClose } = setup();
+
+    await user.keyboard("tmp/exog-app");
+    await user.keyboard("{Enter}");
+
+    expect(onOpenRepository).toHaveBeenCalledWith(repository);
+    expect(onOpenWorktreeInTerminal).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

@@ -62,7 +62,12 @@ describe("resolveShortcut", () => {
 
 describe("shortcutLabel", () => {
   it("returns the display form", () => {
-    expect(shortcutLabel("launcher.toggle")).toBe("Cmd K");
+    expect(shortcutLabel("launcher.toggle")).toBe("Super W / Cmd K");
+    expect(shortcutLabel("launcher.global")).toBe("Super W");
+  });
+
+  it("does not resolve the OS-global Super+W chord from in-app key events", () => {
+    expect(resolveShortcut(event({ key: "w" }), ["global"])).toBeNull();
   });
 });
 

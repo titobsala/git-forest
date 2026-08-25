@@ -65,6 +65,7 @@ export interface Worktree {
   behind: number | null;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt: string | null;
 }
 
 export type RemovalBlocker =
@@ -114,6 +115,7 @@ export interface RemoveWorktreeResult {
 
 export interface TerminalLaunchResult {
   provider: TerminalProviderId;
+  lastUsedAt: string | null;
 }
 
 export interface AgentAvailability {
@@ -127,6 +129,8 @@ export interface AgentLaunchResult {
   provider: TerminalProviderId;
   agentId: AgentDefinitionId;
   command: string;
+  lastUsedAt: string | null;
+  sessionId: AgentSessionId;
 }
 
 export interface AgentDefinition {
@@ -143,6 +147,7 @@ export interface AgentSession {
   agentDefinitionId: AgentDefinitionId;
   status: AgentSessionStatus;
   pid: number | null;
+  processStartTicks: number | null;
   launchedAt: string | null;
   lastSeenAt: string | null;
   exitedAt: string | null;
@@ -213,7 +218,7 @@ export interface ImportRepositoriesResult {
 
 export const FALLBACK_APP_INFO: AppInfo = {
   name: "Git Forest",
-  version: "0.0.6",
+  version: "0.0.8",
   tagline: "Worktrees in reach.",
 };
 
@@ -288,6 +293,7 @@ export function sampleWorktree(overrides: Partial<Worktree> = {}): Worktree {
     behind: null,
     createdAt: "2026-08-20T09:00:00Z",
     updatedAt: "2026-08-20T09:00:00Z",
+    lastUsedAt: null,
     ...overrides,
   };
 }
@@ -305,6 +311,23 @@ export function sampleRepository(
     lastRefreshedAt: "2026-08-20T09:00:00Z",
     createdAt: "2026-08-20T09:00:00Z",
     updatedAt: "2026-08-20T09:00:00Z",
+    ...overrides,
+  };
+}
+
+export function sampleAgentSession(
+  overrides: Partial<AgentSession> = {},
+): AgentSession {
+  return {
+    id: "session-1",
+    worktreeId: "wt-1",
+    agentDefinitionId: "codex",
+    status: "running",
+    pid: 4242,
+    processStartTicks: 99,
+    launchedAt: "2026-08-25T10:00:00Z",
+    lastSeenAt: "2026-08-25T10:00:00Z",
+    exitedAt: null,
     ...overrides,
   };
 }

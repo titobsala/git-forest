@@ -22,7 +22,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../lib/errors";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
-import type { Repository, RepositoryId, Worktree } from "../types/forest";
+import type {
+  Repository,
+  RepositoryId,
+  Worktree,
+  WorktreeId,
+} from "../types/forest";
 
 export type WorktreeIndexStatus = "idle" | "loading" | "ready" | "error";
 
@@ -213,6 +218,32 @@ export function useWorktreeIndex(
     [],
   );
 
+  /** Patch recency after a successful terminal or agent launch. */
+  const touchWorktree = useCallback((id: WorktreeId, lastUsedAt: string) => {
+    setEntries((current) => {
+      let changed = false;
+      const next: IndexState = { ...current };
+      for (const [repositoryId, entry] of Object.entries(current)) {
+        const index = entry.worktrees.findIndex(
+          (worktree) => worktree.id === id,
+        );
+        if (index === -1) {
+          continue;
+        }
+        const worktrees = entry.worktrees.slice();
+        const currentWorktree = worktrees[index];
+        if (!currentWorktree) {
+          continue;
+        }
+        worktrees[index] = { ...currentWorktree, lastUsedAt };
+        next[repositoryId] = { ...entry, worktrees };
+        changed = true;
+        break;
+      }
+      return changed ? next : current;
+    });
+  }, []);
+
   /** Forget a repository that left the forest. */
   const forget = useCallback((id: RepositoryId) => {
     statuses.current.delete(id);
@@ -262,7 +293,15 @@ export function useWorktreeIndex(
     return rows;
   }, [repositories, entries]);
 
-  return { entryFor, ensureLoaded, refresh, setWorktrees, forget, flat };
+  return {
+    entryFor,
+    ensureLoaded,
+    refresh,
+    setWorktrees,
+    touchWorktree,
+    forget,
+    flat,
+  };
 }
 
 export type WorktreeIndex = ReturnType<typeof useWorktreeIndex>;

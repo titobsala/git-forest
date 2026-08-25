@@ -1,6 +1,6 @@
 [package]
 name = "git-forest"
-version = "0.0.6"
+version = "0.0.8"
 description = "Keyboard-first Git worktree and coding-agent control plane"
 authors = ["Git Forest contributors"]
 edition = "2021"
@@ -21,3 +21,6 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"

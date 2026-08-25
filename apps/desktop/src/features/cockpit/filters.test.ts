@@ -35,7 +35,7 @@ describe("matchesFilter", () => {
     expect(matchesFilter(sampleWorktree(), "dirty")).toBe(false);
   });
 
-  it("yields nothing under Agents until session tracking exists", () => {
+  it("yields nothing under Agents when no predicate matches", () => {
     expect(matchesFilter(sampleWorktree(), "agents")).toBe(false);
   });
 

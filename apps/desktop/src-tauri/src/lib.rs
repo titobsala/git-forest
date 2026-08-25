@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-use commands::agents::{detect_agents, launch_agent};
+use commands::agents::{detect_agents, launch_agent, list_agent_sessions};
 use commands::app_info::get_app_info;
 use commands::forest::{get_forest_state, update_forest_configuration};
 use commands::repositories::{
@@ -27,6 +27,7 @@ mod forest;
 mod git;
 mod persistence;
 mod platform;
+mod processes;
 mod scan;
 mod terminals;
 
@@ -36,8 +37,14 @@ pub struct AppState {
 }
 
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(platform::global_shortcut::plugin());
+    }
+
+    builder
         .setup(|app| {
             let platform = PlatformPaths::from_app(app)?;
             let database = Database::open(&platform.database_path())?;
@@ -46,6 +53,8 @@ pub fn run() {
                 forest: Mutex::new(forest),
                 scans: ScanCoordinator::new(),
             });
+            #[cfg(desktop)]
+            platform::global_shortcut::register(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -69,7 +78,8 @@ pub fn run() {
             remove_worktree,
             open_worktree,
             detect_agents,
-            launch_agent
+            launch_agent,
+            list_agent_sessions
         ])
         .run(tauri::generate_context!())
         .expect("error while running Git Forest");
