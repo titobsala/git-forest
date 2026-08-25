@@ -74,9 +74,6 @@ impl ForestService {
             session.pid = Some(i64::from(identity.pid));
             session.process_start_ticks = i64::try_from(identity.start_ticks).ok();
             session.last_seen_at = Some(Utc::now());
-        } else {
-            session.status = AgentSessionStatus::Unknown;
-            session.last_seen_at = Some(Utc::now());
         }
         update_agent_session(self.db.connection(), &session)?;
 
@@ -304,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn successful_launch_without_a_visible_pid_is_unknown() {
+    fn successful_launch_without_a_visible_pid_stays_starting() {
         let env = TempEnv::new();
         let launcher =
             FakeDesktopLauncher::with_binaries(&["warp-terminal", "codex"]).and_scheme("warp");
@@ -313,7 +310,7 @@ mod tests {
             .create_worktree(CreateWorktreeInput {
                 repository_id: repository.id,
                 base_ref: "main".into(),
-                branch: "feat/unknown-pid".into(),
+                branch: "feat/starting-pid".into(),
                 name: None,
             })
             .expect("create");
@@ -327,7 +324,7 @@ mod tests {
         )
         .expect("get")
         .expect("present");
-        assert_eq!(session.status, crate::domain::AgentSessionStatus::Unknown);
+        assert_eq!(session.status, crate::domain::AgentSessionStatus::Starting);
         assert_eq!(session.pid, None);
     }
 

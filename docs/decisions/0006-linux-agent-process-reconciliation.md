@@ -26,7 +26,7 @@ Launch tracking:
 2. insert `starting`;
 3. on dispatch failure mark `failed`;
 4. on success poll briefly for a **new** matching identity, preferring the newest start tick;
-5. transition to `running` with identity, or `unknown` when detection is inconclusive.
+5. transition to `running` with identity, or remain `starting` when detection is inconclusive.
 
 Reconciliation (on service init and before session lists / removal previews):
 
@@ -35,6 +35,7 @@ Reconciliation (on service init and before session lists / removal previews):
 | Same PID, start ticks, cwd, and command | stay `running`, refresh `last_seen_at` |
 | Process absent | `exited`, set `exited_at` |
 | Permission/identity mismatch or PID reuse (same PID, different ticks) | `unknown`, clear live PID identity |
+| `starting` without a PID, newest unclaimed matching identity | `running` with identity |
 | Stale `starting` without a PID (> 30s) | `unknown` |
 | `exited`, `unknown`, `failed` | terminal for automatic reconciliation |
 
@@ -47,7 +48,7 @@ Outside Linux, the inspector reports no matches / inaccessible status rather tha
 ## Consequences
 
 - Forest can distinguish approximately running, finished, and unknown agent sessions after launches and restarts.
-- Warp's fire-and-forget URI means a matching process may never appear; that is `unknown`, not a silent success.
+- Warp's fire-and-forget URI means a matching process may appear after the brief launch poll. The session stays `starting` (active and reconcilable) until a later reconcile attaches it or the 30s stale window expires. Immediate `unknown` would drop badges, tray counts, and the `ActiveSession` removal blocker, and would never attach the process.
 - PID reuse cannot revive an old session because start ticks must match.
 - Adding another OS means a new `ProcessInspector`, not a change to Forest commands or the session model.
 - Do not claim generic resume. A later agent-specific resume path can use these identities if an agent provides one.

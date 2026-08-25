@@ -22,9 +22,16 @@ impl ForestService {
     pub fn reconcile_agent_sessions(&self) -> Result<Vec<AgentSession>, ForestError> {
         let now = Utc::now();
         let sessions = list_agent_sessions(self.db.connection())?;
+        let mut claimed: Vec<(i32, u64)> =
+            sessions.iter().filter_map(session_identity_key).collect();
         let mut reconciled = Vec::new();
         for session in sessions {
-            if let Some(next) = self.reconcile_one(&session, now)? {
+            if let Some(next) = self.reconcile_one(&session, now, &claimed)? {
+                if let Some(key) = session_identity_key(&next) {
+                    if !claimed.contains(&key) {
+                        claimed.push(key);
+                    }
+                }
                 update_agent_session(self.db.connection(), &next)?;
                 reconciled.push(next);
             } else {
@@ -55,6 +62,7 @@ impl ForestService {
         &self,
         session: &AgentSession,
         now: DateTime<Utc>,
+        claimed: &[(i32, u64)],
     ) -> Result<Option<AgentSession>, ForestError> {
         match session.status {
             AgentSessionStatus::Exited
@@ -64,22 +72,63 @@ impl ForestService {
                 if let Some(pid) = session.pid {
                     return self.reconcile_known_pid(session, pid as i32, now);
                 }
-                if session.status == AgentSessionStatus::Starting
-                    && session.launched_at.is_some_and(|launched| {
-                        now.signed_duration_since(launched)
-                            .to_std()
-                            .unwrap_or_default()
-                            >= STALE_STARTING
-                    })
-                {
-                    let mut next = session.clone();
-                    next.status = AgentSessionStatus::Unknown;
-                    next.last_seen_at = Some(now);
-                    return Ok(Some(next));
+                if session.status == AgentSessionStatus::Starting {
+                    return self.reconcile_starting_without_pid(session, now, claimed);
                 }
                 Ok(None)
             }
         }
+    }
+
+    fn reconcile_starting_without_pid(
+        &self,
+        session: &AgentSession,
+        now: DateTime<Utc>,
+        claimed: &[(i32, u64)],
+    ) -> Result<Option<AgentSession>, ForestError> {
+        if let Some(identity) = self.discover_unclaimed_match(session, claimed)? {
+            let mut next = session.clone();
+            next.status = AgentSessionStatus::Running;
+            next.pid = Some(i64::from(identity.pid));
+            next.process_start_ticks = i64::try_from(identity.start_ticks).ok();
+            next.last_seen_at = Some(now);
+            return Ok(Some(next));
+        }
+        if session.launched_at.is_some_and(|launched| {
+            now.signed_duration_since(launched)
+                .to_std()
+                .unwrap_or_default()
+                >= STALE_STARTING
+        }) {
+            let mut next = session.clone();
+            next.status = AgentSessionStatus::Unknown;
+            next.last_seen_at = Some(now);
+            return Ok(Some(next));
+        }
+        Ok(None)
+    }
+
+    fn discover_unclaimed_match(
+        &self,
+        session: &AgentSession,
+        claimed: &[(i32, u64)],
+    ) -> Result<Option<crate::processes::ProcessIdentity>, ForestError> {
+        let Some(worktree) = find_worktree_by_id(self.db.connection(), &session.worktree_id)?
+        else {
+            return Ok(None);
+        };
+        let Some(definition) =
+            get_agent_definition(self.db.connection(), session.agent_definition_id.as_str())?
+        else {
+            return Ok(None);
+        };
+        Ok(newest_unseen(
+            self.processes.snapshot_matching(&ProcessExpectation {
+                worktree_path: worktree.path,
+                agent_command: definition.command,
+            })?,
+            claimed,
+        ))
     }
 
     fn reconcile_known_pid(
@@ -141,12 +190,16 @@ fn mark_unknown(session: &AgentSession, now: DateTime<Utc>) -> AgentSession {
     next
 }
 
+fn session_identity_key(session: &AgentSession) -> Option<(i32, u64)> {
+    Some((session.pid? as i32, session.process_start_ticks? as u64))
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::tests::{open_service_with_processes, TempEnv};
     use crate::domain::{
         AgentDefinitionId, AgentSession, AgentSessionId, AgentSessionStatus, CreateWorktreeInput,
-        WorktreeId,
+        RemovalBlocker, WorktreeId,
     };
     use crate::git::testing::{init_repository_at, run_git};
     use crate::persistence::{get_agent_session, insert_agent_session};
@@ -409,5 +462,104 @@ mod tests {
         assert_eq!(listed[0].worktree_id, worktree_id);
         assert_eq!(listed[0].status, AgentSessionStatus::Running);
         assert_eq!(listed[0].pid, Some(4242));
+    }
+
+    #[test]
+    fn starting_session_attaches_a_process_that_appears_later() {
+        let env = TempEnv::new();
+        let inspector = FakeProcessInspector::new();
+        let (service, repository) = imported(&env, inspector.clone());
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/late-pid".into(),
+                name: None,
+            })
+            .expect("create");
+
+        let result = service
+            .launch_agent(created.worktree.id.clone(), None)
+            .expect("launch");
+        let launched = get_agent_session(service.db_connection_for_test(), &result.session_id)
+            .expect("get")
+            .expect("present");
+        assert_eq!(launched.status, AgentSessionStatus::Starting);
+        assert_eq!(launched.pid, None);
+
+        inspector.add_live(identity(created.worktree.path.clone(), 4242, 99));
+        let listed = service.list_agent_sessions().expect("list");
+        let session = listed
+            .iter()
+            .find(|item| item.id == result.session_id)
+            .expect("row");
+        assert_eq!(session.status, AgentSessionStatus::Running);
+        assert_eq!(session.pid, Some(4242));
+        assert_eq!(session.process_start_ticks, Some(99));
+    }
+
+    #[test]
+    fn undetected_launch_stays_starting_and_blocks_removal() {
+        let env = TempEnv::new();
+        let inspector = FakeProcessInspector::new();
+        let (service, repository) = imported(&env, inspector);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/starting-block".into(),
+                name: None,
+            })
+            .expect("create");
+
+        service
+            .launch_agent(created.worktree.id.clone(), None)
+            .expect("launch");
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(preview.blockers.contains(&RemovalBlocker::ActiveSession));
+        assert!(preview.requires_force);
+
+        let listed = service.list_agent_sessions().expect("list");
+        assert_eq!(listed[0].status, AgentSessionStatus::Starting);
+        assert_eq!(listed[0].pid, None);
+    }
+
+    #[test]
+    fn later_process_is_claimed_by_only_one_starting_session() {
+        let env = TempEnv::new();
+        let inspector = FakeProcessInspector::new();
+        let (service, repository) = imported(&env, inspector.clone());
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/claim-once".into(),
+                name: None,
+            })
+            .expect("create");
+
+        service
+            .launch_agent(created.worktree.id.clone(), None)
+            .expect("first");
+        service
+            .launch_agent(created.worktree.id.clone(), None)
+            .expect("second");
+        inspector.add_live(identity(created.worktree.path.clone(), 4242, 99));
+
+        let listed = service.list_agent_sessions().expect("list");
+        let running: Vec<_> = listed
+            .iter()
+            .filter(|session| session.status == AgentSessionStatus::Running)
+            .collect();
+        let starting: Vec<_> = listed
+            .iter()
+            .filter(|session| session.status == AgentSessionStatus::Starting)
+            .collect();
+        assert_eq!(running.len(), 1);
+        assert_eq!(starting.len(), 1);
+        assert_eq!(running[0].pid, Some(4242));
+        assert_eq!(starting[0].pid, None);
     }
 }
