@@ -32,6 +32,7 @@ pub use scan::{
 };
 pub use terminal::TerminalLaunchResult;
 pub use worktree::{
-    CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult, RemovalBlocker,
-    RemoveWorktreeResult, Worktree, WorktreeRemovalPreview,
+    CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult, LocalFileCandidate,
+    LocalFileCopyFailure, LocalFileCopyResult, RemovalBlocker, RemoveWorktreeResult, Worktree,
+    WorktreeRemovalPreview,
 };

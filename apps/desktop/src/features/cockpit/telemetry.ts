@@ -123,6 +123,15 @@ export function telemetryBadges(worktree: Worktree): TelemetryBadge[] {
     });
   }
 
+  if (worktree.ignoredFiles > 0) {
+    badges.push({
+      id: "ignored",
+      label: `${worktree.ignoredFiles} ignored`,
+      tone: "neutral",
+      title: `${worktree.ignoredFiles} ignored local file${worktree.ignoredFiles === 1 ? "" : "s"}`,
+    });
+  }
+
   return badges;
 }
 

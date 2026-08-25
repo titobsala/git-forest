@@ -21,6 +21,8 @@ import type {
   AgentDefinition,
   AgentDefinitionId,
   LocalBranch,
+  LocalFileCandidate,
+  LocalFileCopyFailure,
   Repository,
   Worktree,
 } from "../../types/forest";
@@ -52,6 +54,10 @@ export function CreateWorktreeDialog({
   const [branch, setBranch] = useState("");
   const [name, setName] = useState("");
   const [destination, setDestination] = useState<string | null>(null);
+  const [localEnvFiles, setLocalEnvFiles] = useState<LocalFileCandidate[]>([]);
+  const [copyLocalEnvFiles, setCopyLocalEnvFiles] = useState(true);
+  const [copiedEnvFiles, setCopiedEnvFiles] = useState<string[]>([]);
+  const [copyFailures, setCopyFailures] = useState<LocalFileCopyFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
@@ -67,7 +73,9 @@ export function CreateWorktreeDialog({
   const retryRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const afterTouched = useRef(false);
+  const copyChoiceTouched = useRef(false);
 
+  const copyFailed = created !== null && copyFailures.length > 0;
   const launchFailed = created !== null && pendingAgentId !== null;
   const creationLocked = created !== null;
 
@@ -173,6 +181,7 @@ export function CreateWorktreeDialog({
     if (!branch.trim() || creationLocked) {
       if (!branch.trim()) {
         setDestination(null);
+        setLocalEnvFiles([]);
       }
       return;
     }
@@ -182,21 +191,27 @@ export function CreateWorktreeDialog({
       baseRef,
       branch: branch.trim(),
       name: name.trim() || undefined,
+      copyLocalEnvFiles,
     })
       .then((result) => {
         if (!cancelled) {
           setDestination(result.destination);
+          setLocalEnvFiles(result.localEnvFiles);
+          if (result.localEnvFiles.length > 0 && !copyChoiceTouched.current) {
+            setCopyLocalEnvFiles(true);
+          }
         }
       })
       .catch(() => {
         if (!cancelled) {
           setDestination(null);
+          setLocalEnvFiles([]);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [repository.id, baseRef, branch, name, creationLocked]);
+  }, [repository.id, baseRef, branch, name, creationLocked, copyLocalEnvFiles]);
 
   async function launchSelected(
     worktree: Worktree,
@@ -229,9 +244,15 @@ export function CreateWorktreeDialog({
         baseRef,
         branch: branch.trim(),
         name: name.trim() || undefined,
+        copyLocalEnvFiles,
       });
       setCreated(result.worktree);
+      setCopiedEnvFiles(result.localEnvCopy.copied);
+      setCopyFailures(result.localEnvCopy.failures);
       onCreated(result.worktrees, result.worktree);
+      if (result.localEnvCopy.failures.length > 0) {
+        return;
+      }
       if (afterCreation) {
         await launchSelected(result.worktree, afterCreation);
       } else {
@@ -252,6 +273,19 @@ export function CreateWorktreeDialog({
     setBusy(true);
     try {
       await launchSelected(created, pendingAgentId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLaunchAnyway() {
+    if (!created || !afterCreation) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await launchSelected(created, afterCreation);
     } finally {
       setBusy(false);
     }
@@ -285,6 +319,10 @@ export function CreateWorktreeDialog({
         {error ? (
           <p className="banner" role="alert">
             {error}
+          </p>
+        ) : copyFailed ? (
+          <p className="banner" role="alert">
+            Worktree created, but local environment files did not copy
           </p>
         ) : null}
 
@@ -353,7 +391,58 @@ export function CreateWorktreeDialog({
             <p className="hint font-mono">Destination: {destination}</p>
           ) : null}
 
-          {launchFailed ? (
+          {localEnvFiles.length > 0 ? (
+            <div className="field">
+              <label className="flex items-center gap-1.5 text-body">
+                <input
+                  type="checkbox"
+                  checked={copyLocalEnvFiles}
+                  disabled={creationLocked}
+                  onChange={(event) => {
+                    copyChoiceTouched.current = true;
+                    setCopyLocalEnvFiles(event.target.checked);
+                  }}
+                />
+                Copy local environment files
+              </label>
+              <ul className="hint font-mono">
+                {localEnvFiles.map((file) => (
+                  <li key={file.path}>{file.path}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {copyFailed && !launchFailed ? (
+            <div className="stack">
+              {copiedEnvFiles.length > 0 ? (
+                <p className="hint font-mono">
+                  Copied: {copiedEnvFiles.join(", ")}
+                </p>
+              ) : null}
+              <ul className="hint font-mono">
+                {copyFailures.map((failure) => (
+                  <li key={failure.path}>
+                    {failure.path}: {failure.error.message}
+                  </li>
+                ))}
+              </ul>
+              <div className="button-row">
+                <button type="button" className="secondary" onClick={onClose}>
+                  Close
+                </button>
+                {afterCreation ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleLaunchAnyway()}
+                  >
+                    Launch anyway
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : launchFailed ? (
             <div className="button-row">
               <button type="button" className="secondary" onClick={onClose}>
                 Close

@@ -67,6 +67,7 @@ export interface Worktree {
   isPrimary: boolean;
   trackedChanges: number;
   untrackedFiles: number;
+  ignoredFiles: number;
   ahead: number | null;
   behind: number | null;
   createdAt: string;
@@ -89,22 +90,40 @@ export interface LocalBranch {
   name: string;
 }
 
+export interface LocalFileCandidate {
+  path: string;
+  sizeBytes: number;
+}
+
+export interface LocalFileCopyFailure {
+  path: string;
+  error: CommandError;
+}
+
+export interface LocalFileCopyResult {
+  copied: string[];
+  failures: LocalFileCopyFailure[];
+}
+
 export interface CreateWorktreeInput {
   repositoryId: RepositoryId;
   baseRef: string;
   branch: string;
   name?: string;
+  copyLocalEnvFiles: boolean;
 }
 
 export interface CreateWorktreePreview {
   destination: string;
   repositorySlug: string;
   worktreeSlug: string;
+  localEnvFiles: LocalFileCandidate[];
 }
 
 export interface CreateWorktreeResult {
   worktree: Worktree;
   worktrees: Worktree[];
+  localEnvCopy: LocalFileCopyResult;
 }
 
 export interface WorktreeRemovalPreview {
@@ -355,6 +374,7 @@ export function sampleWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isPrimary: false,
     trackedChanges: 0,
     untrackedFiles: 0,
+    ignoredFiles: 0,
     ahead: null,
     behind: null,
     createdAt: "2026-08-20T09:00:00Z",

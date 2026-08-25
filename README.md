@@ -66,14 +66,14 @@ The window shows Forest status and configuration, then lets you:
 - scan a folder with live progress and cancellation, then import selected candidates;
 - search indexed repositories by name, path, branch, or remote;
 - refresh Git metadata and remove a repository from the Forest index only;
-- select a repository to list worktrees, create a new-branch worktree, and remove one after a safety preview;
+- select a repository to list worktrees, create a new-branch worktree (optionally copying ignored root `.env` files from the indexed repository), and remove one after a safety preview;
 - open a selected worktree in Warp (new tab by default, or a new window from Settings);
 - launch the configured default agent (Codex, Claude Code, or OpenCode) in that worktree, then see the session on the cockpit badge, Agents filter, monitor, and tray;
 - invoke Quick Launch with `Super + W` (or `Ctrl/Cmd + K` while Forest is focused), search repositories and worktrees, and open a worktree in Warp with Enter.
 
 Restarting the app keeps that index. Schema version 5 adds cached repository `health`, `health_detail`, and `last_reconciled_at` (existing rows migrate to `unknown`). Schema version 4 adds `agent_sessions.process_start_ticks` so a reused PID is not treated as the original process. Schema version 3 adds `worktrees.last_used_at` for launcher recency without dropping earlier rows. Schema version 2 added repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`).
 
-Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>`, so repositories with the same name remain isolated. Removing a repository or a clean worktree never deletes Git branches; worktrees containing tracked, untracked, or ignored local changes require an explicit force action.
+Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>`, so repositories with the same name remain isolated. Removing a repository or a clean worktree never deletes Git branches. Worktrees with tracked or untracked changes require an explicit force action. Ignored-only worktrees warn that those local files will be deleted, then use ordinary removal. Create Worktree can copy ignored root-level `.env` family files from the indexed repository root; the copy is on by default when candidates exist and can be turned off.
 
 Limitations in this release:
 
@@ -101,8 +101,8 @@ After `bun run dev`:
 2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.
 3. Search by name, path, branch, or remote; refresh metadata; restart and confirm the index remains.
 4. Remove a repository from Forest and confirm the directory is still on disk.
-5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>-<repository-id>/`. After creation, choose Codex (or Create only). Unavailable agents stay visible but disabled as Missing.
-6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists. Status-unavailable and Git-unknown rows omit ordinary remove.
+5. In a disposable repo, ignore `.env`, `.env.local`, `.env.development`, `.env.development.local`, and an unrelated `.cache`. Create a worktree and confirm the Copy local environment files checkbox lists those env names (not `.cache`), defaults on, and can be unchecked. Create once with copying enabled and once disabled; confirm the exact copied set, independent edits, and that names appear without contents. If copy fails, Launch anyway must not create a second worktree. After a successful copy, the selected agent launches; unavailable agents stay visible but disabled as Missing.
+6. Ignored-only worktrees warn that N ignored local files will be deleted and use ordinary Remove worktree. A true untracked or dirty worktree still requires Force remove; the branch is kept. Status-unavailable and Git-unknown rows omit ordinary remove.
 7. With Warp installed, open a worktree from the cockpit (`Enter` or the row action) and confirm a tab opens at that path.
 8. With Codex, Claude Code, or OpenCode on `PATH`, launch the default agent (`⌥A` or the row action) and confirm Warp starts that command in the worktree. Settings should show Installed/Missing next to each built-in. If launch fails after create, Retry launch must not create a second worktree.
 9. Press `Super + W` from another app while Forest is hidden: the window appears, Quick Launch is open, and search is focused. Press it again: the overlay closes and the window hides. `Ctrl/Cmd + K` still toggles the overlay without hiding Forest.

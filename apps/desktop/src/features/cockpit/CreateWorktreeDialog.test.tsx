@@ -67,6 +67,7 @@ describe("CreateWorktreeDialog", () => {
       destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
       repositorySlug: "exog-app-repo-1",
       worktreeSlug: "feat-demo",
+      localEnvFiles: [],
     });
     detectMock.mockResolvedValue([
       { id: "codex", name: "Codex", command: "codex", installed: true },
@@ -91,6 +92,7 @@ describe("CreateWorktreeDialog", () => {
     createMock.mockResolvedValueOnce({
       worktree: created,
       worktrees: [created],
+      localEnvCopy: { copied: [], failures: [] },
     });
     const { onCreated, onClose } = renderDialog();
 
@@ -109,6 +111,7 @@ describe("CreateWorktreeDialog", () => {
       baseRef: "main",
       branch: "feat/demo",
       name: undefined,
+      copyLocalEnvFiles: true,
     });
     expect(onCreated).toHaveBeenCalledWith([created], created);
     expect(launchMock).not.toHaveBeenCalled();
@@ -120,6 +123,7 @@ describe("CreateWorktreeDialog", () => {
     createMock.mockResolvedValueOnce({
       worktree: created,
       worktrees: [created],
+      localEnvCopy: { copied: [], failures: [] },
     });
     const { onCreated, onAgentLaunched, onClose } = renderDialog();
 
@@ -169,6 +173,7 @@ describe("CreateWorktreeDialog", () => {
     createMock.mockResolvedValueOnce({
       worktree: created,
       worktrees: [created],
+      localEnvCopy: { copied: [], failures: [] },
     });
     launchMock.mockRejectedValueOnce({
       code: "agent_unavailable",
@@ -243,5 +248,170 @@ describe("CreateWorktreeDialog", () => {
     });
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+
+  it("hides the environment copy checkbox when no candidates exist", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    await screen.findByText(
+      "Destination: /tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+    );
+    expect(
+      screen.queryByLabelText("Copy local environment files"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("defaults the environment copy checkbox on and sends true", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [
+        { path: ".env", sizeBytes: 12 },
+        { path: ".env.local", sizeBytes: 8 },
+      ],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: { copied: [".env", ".env.local"], failures: [] },
+    });
+    renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    const checkbox = await screen.findByLabelText(
+      "Copy local environment files",
+    );
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText(".env")).toBeInTheDocument();
+    expect(screen.getByText(".env.local")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("After creation"), "");
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+    expect(createMock).toHaveBeenCalledWith({
+      repositoryId: "repo-1",
+      baseRef: "main",
+      branch: "feat/demo",
+      name: undefined,
+      copyLocalEnvFiles: true,
+    });
+  });
+
+  it("keeps a manual opt-out across preview refresh", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: { copied: [], failures: [] },
+    });
+    renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    const checkbox = await screen.findByLabelText(
+      "Copy local environment files",
+    );
+    expect(checkbox).toBeChecked();
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    await user.type(
+      screen.getByLabelText("Directory name (optional)"),
+      "custom",
+    );
+    await screen.findByText(
+      "Destination: /tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+    );
+    expect(
+      screen.getByLabelText("Copy local environment files"),
+    ).not.toBeChecked();
+    await user.selectOptions(screen.getByLabelText("After creation"), "");
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+    expect(createMock).toHaveBeenCalledWith({
+      repositoryId: "repo-1",
+      baseRef: "main",
+      branch: "feat/demo",
+      name: "custom",
+      copyLocalEnvFiles: false,
+    });
+  });
+
+  it("launches the selected agent after a successful copy", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: { copied: [".env"], failures: [] },
+    });
+    const { onCreated, onAgentLaunched, onClose } = renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    await screen.findByLabelText("Copy local environment files");
+    await user.selectOptions(
+      await screen.findByLabelText("After creation"),
+      "codex",
+    );
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+    expect(onCreated).toHaveBeenCalledWith([created], created);
+    expect(launchMock).toHaveBeenCalledWith("wt-1", "codex");
+    expect(onAgentLaunched).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps the created worktree on copy failure and launches only when asked", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: {
+        copied: [],
+        failures: [
+          {
+            path: ".env",
+            error: { code: "io", message: "failed to read source" },
+          },
+        ],
+      },
+    });
+    const { onCreated, onClose, onAgentLaunched } = renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    await screen.findByLabelText("Copy local environment files");
+    await user.selectOptions(
+      await screen.findByLabelText("After creation"),
+      "codex",
+    );
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Worktree created, but local environment files did not copy",
+    );
+    expect(screen.getByText(".env: failed to read source")).toBeInTheDocument();
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(launchMock).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Create worktree" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Launch anyway" }));
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(launchMock).toHaveBeenCalledTimes(1);
+    expect(launchMock).toHaveBeenCalledWith("wt-1", "codex");
+    expect(onAgentLaunched).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalled();
   });
 });

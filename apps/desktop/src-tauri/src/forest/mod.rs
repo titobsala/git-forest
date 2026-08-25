@@ -22,6 +22,7 @@ mod naming;
 mod repositories;
 mod sessions;
 mod terminals;
+mod worktree_seeds;
 mod worktrees;
 
 const DEFAULT_PID_POLL_ATTEMPTS: u32 = 5;

@@ -42,6 +42,17 @@ interface InspectorPanelProps {
   session?: AgentSession | null;
 }
 
+function removalPreviewCopy(preview: WorktreeRemovalPreview): string {
+  const { worktree, blockers } = preview;
+  if (blockers.length > 0) {
+    return `${worktree.trackedChanges} modified, ${worktree.untrackedFiles} untracked. Blocked: ${blockers.join(", ")}.`;
+  }
+  if (worktree.ignoredFiles > 0) {
+    return `${worktree.ignoredFiles} ignored local files will be deleted with this worktree.`;
+  }
+  return `${worktree.trackedChanges} modified, ${worktree.untrackedFiles} untracked. This worktree is clean.`;
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -262,7 +273,7 @@ export function InspectorPanel({
             />
             <Field
               label="Changes"
-              value={`${worktree.trackedChanges} tracked · ${worktree.untrackedFiles} untracked`}
+              value={`${worktree.trackedChanges} tracked · ${worktree.untrackedFiles} untracked · ${worktree.ignoredFiles} ignored`}
             />
             {worktree.statusError ? (
               <Field label="Status" value={worktree.statusError.message} />
@@ -329,12 +340,7 @@ export function InspectorPanel({
                     Remove {preview.worktree.name}?
                   </p>
                   <p className="text-body text-ink-muted">
-                    {preview.worktree.trackedChanges} modified,{" "}
-                    {preview.worktree.untrackedFiles} untracked.
-                    {preview.blockers.length > 0
-                      ? ` Blocked: ${preview.blockers.join(", ")}.`
-                      : " This worktree is clean."}{" "}
-                    The branch is kept.
+                    {removalPreviewCopy(preview)} The branch is kept.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <button

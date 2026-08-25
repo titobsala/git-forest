@@ -152,6 +152,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -178,6 +179,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent-recent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         let before = chrono::Utc::now();
@@ -207,6 +209,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent-no-use".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -235,6 +238,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agents".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -261,6 +265,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/missing-agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -290,6 +295,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/gone-agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         std::fs::remove_dir_all(&created.worktree.path).expect("remove");
@@ -318,6 +324,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/starting-pid".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -370,6 +377,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/pid".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         inspector.appear_after_baseline(crate::processes::ProcessIdentity {
@@ -405,6 +413,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/failed-dispatch".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -433,6 +442,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/many".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 

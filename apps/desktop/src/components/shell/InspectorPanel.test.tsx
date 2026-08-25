@@ -297,4 +297,95 @@ describe("InspectorPanel", () => {
       screen.getByRole("button", { name: "Remove worktree" }),
     ).toHaveFocus();
   });
+
+  it("shows tracked, untracked, and ignored counts", () => {
+    renderPanel(
+      sampleWorktree({
+        trackedChanges: 1,
+        untrackedFiles: 2,
+        ignoredFiles: 3,
+      }),
+    );
+    expect(
+      screen.getByText("1 tracked · 2 untracked · 3 ignored"),
+    ).toBeInTheDocument();
+  });
+
+  it("removes an ignored-only worktree without force", async () => {
+    const user = userEvent.setup();
+    const ignored = sampleWorktree({
+      id: "wt-ignored",
+      name: "feat-ignored",
+      ignoredFiles: 2,
+    });
+    previewMock.mockResolvedValueOnce({
+      worktree: ignored,
+      allowed: true,
+      requiresForce: false,
+      blockers: [],
+    });
+    removeMock.mockResolvedValueOnce({
+      removed: true,
+      requiresForce: false,
+      blockers: [],
+      worktrees: [],
+    });
+
+    renderPanel(ignored);
+    await user.click(screen.getByRole("button", { name: "Remove worktree" }));
+
+    const region = await screen.findByRole("region", {
+      name: "Remove worktree",
+    });
+    expect(
+      within(region).getByText(
+        /2 ignored local files will be deleted with this worktree/,
+      ),
+    ).toBeTruthy();
+    expect(
+      within(region).queryByRole("button", { name: "Force remove" }),
+    ).toBeNull();
+
+    await user.click(
+      within(region).getByRole("button", { name: "Remove worktree" }),
+    );
+    expect(removeMock).toHaveBeenCalledWith("wt-ignored", false);
+  });
+
+  it("force-removes a worktree that has true untracked files", async () => {
+    const user = userEvent.setup();
+    const untracked = sampleWorktree({
+      id: "wt-untracked",
+      name: "feat-untracked",
+      untrackedFiles: 1,
+    });
+    previewMock.mockResolvedValueOnce({
+      worktree: untracked,
+      allowed: false,
+      requiresForce: true,
+      blockers: ["untracked"],
+    });
+    removeMock.mockResolvedValueOnce({
+      removed: true,
+      requiresForce: false,
+      blockers: [],
+      worktrees: [],
+    });
+
+    renderPanel(untracked);
+    await user.click(screen.getByRole("button", { name: "Remove worktree" }));
+
+    const region = await screen.findByRole("region", {
+      name: "Remove worktree",
+    });
+    expect(within(region).getByText(/Blocked: untracked/)).toBeTruthy();
+    expect(
+      within(region).queryByRole("button", { name: "Remove worktree" }),
+    ).toBeNull();
+
+    await user.click(
+      within(region).getByRole("button", { name: "Force remove" }),
+    );
+    expect(removeMock).toHaveBeenCalledWith("wt-untracked", true);
+  });
 });

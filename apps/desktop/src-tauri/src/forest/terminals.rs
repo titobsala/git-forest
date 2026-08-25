@@ -72,6 +72,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/open".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -97,6 +98,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/recent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         assert_eq!(created.worktree.last_used_at, None);
@@ -132,6 +134,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/no-use".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -157,6 +160,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/no-warp".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -177,6 +181,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/gone".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         std::fs::remove_dir_all(&created.worktree.path).expect("remove");
@@ -199,6 +204,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/healthy".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         // Reconciling the repository would inspect this worktree too and fail.
@@ -236,6 +242,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/window".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         let mut configuration = service.configuration().expect("config");

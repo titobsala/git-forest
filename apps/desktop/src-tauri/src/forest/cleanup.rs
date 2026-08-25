@@ -373,6 +373,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/gone".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::remove_dir_all(&created.worktree.path).expect("remove dir");
@@ -402,6 +403,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/keep-dir".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -502,6 +504,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/sessions".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         for (id, status) in [
@@ -585,6 +588,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/stale".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::remove_dir_all(&created.worktree.path).expect("remove dir");

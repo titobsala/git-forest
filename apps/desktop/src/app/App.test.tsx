@@ -135,6 +135,7 @@ describe("App", () => {
 
     // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
+    expect(document.querySelector("header img")).toHaveAttribute("alt", "");
     expect(screen.queryByText("v0.1.0")).not.toBeInTheDocument();
   });
 

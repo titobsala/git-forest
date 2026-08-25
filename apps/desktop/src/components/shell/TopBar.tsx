@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import type { AppInfo } from "../../types/forest";
 import type { ViewId } from "../../app/views";
 import { VIEW_LABELS } from "../../app/views";
+import logo from "../../assets/logo.png";
 import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
@@ -28,9 +29,14 @@ export function TopBar({ appInfo, view, tray }: TopBarProps) {
       data-tauri-drag-region
       className="flex h-topbar shrink-0 items-center gap-2 border-b border-card-border bg-card pr-1 pl-3"
     >
-      <span
+      <img
+        src={logo}
+        alt=""
+        width={20}
+        height={20}
+        data-tauri-drag-region
+        className="size-5 shrink-0 rounded-[3px]"
         aria-hidden="true"
-        className="size-2 shrink-0 rounded-full bg-brand"
       />
       <h1 data-tauri-drag-region className="text-display text-ink">
         {appInfo.name}

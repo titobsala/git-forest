@@ -5,8 +5,8 @@ use chrono::Utc;
 
 use crate::domain::{
     CommandError, CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult, ForestError,
-    RemovalBlocker, RemoveWorktreeResult, Repository, RepositoryId, Worktree, WorktreeId,
-    WorktreeRemovalPreview,
+    LocalFileCopyResult, RemovalBlocker, RemoveWorktreeResult, Repository, RepositoryId, Worktree,
+    WorktreeId, WorktreeRemovalPreview,
 };
 use crate::git::refs::{branch_exists, resolve_commit, validate_branch_name, LocalBranch};
 use crate::git::status::inspect_worktree_status;
@@ -47,7 +47,10 @@ impl ForestService {
         input: CreateWorktreeInput,
     ) -> Result<CreateWorktreePreview, ForestError> {
         let repository = self.require_repository(&input.repository_id)?;
-        self.create_destination(&repository, &input)
+        let mut preview = self.create_destination(&repository, &input)?;
+        preview.local_env_files =
+            super::worktree_seeds::discover_environment_files(&self.git, &repository.path)?;
+        Ok(preview)
     }
 
     pub fn create_worktree(
@@ -57,6 +60,11 @@ impl ForestService {
         let repository = self.require_repository(&input.repository_id)?;
         let preview = self.create_destination(&repository, &input)?;
         self.validate_create(&repository, &input, &preview.destination)?;
+
+        let mut local_env_copy = LocalFileCopyResult::empty();
+        if input.copy_local_env_files {
+            super::worktree_seeds::discover_environment_files(&self.git, &repository.path)?;
+        }
 
         if let Some(parent) = preview.destination.parent() {
             std::fs::create_dir_all(parent)?;
@@ -81,6 +89,21 @@ impl ForestService {
             return Err(error);
         }
 
+        if input.copy_local_env_files {
+            match super::worktree_seeds::discover_environment_files(&self.git, &repository.path) {
+                Ok(candidates) => {
+                    local_env_copy = super::worktree_seeds::copy_environment_files(
+                        &repository.path,
+                        &preview.destination,
+                        &candidates,
+                    );
+                }
+                Err(_) => {
+                    log::warn!("failed to rediscover local environment files after create");
+                }
+            }
+        }
+
         let worktrees = self.reconcile_worktrees(&repository)?;
         let worktree = worktrees
             .iter()
@@ -90,6 +113,7 @@ impl ForestService {
         Ok(CreateWorktreeResult {
             worktree,
             worktrees,
+            local_env_copy,
         })
     }
 
@@ -198,6 +222,7 @@ impl ForestService {
             destination,
             repository_slug,
             worktree_slug,
+            local_env_files: Vec::new(),
         })
     }
 
@@ -372,6 +397,7 @@ fn summarize(
         is_primary,
         tracked_changes: 0,
         untracked_files: 0,
+        ignored_files: 0,
         ahead: None,
         behind: None,
         created_at: record.created_at,
@@ -389,6 +415,7 @@ fn summarize(
                 summary.detached = summary.detached || status.detached;
                 summary.tracked_changes = status.tracked_changes;
                 summary.untracked_files = status.untracked_files;
+                summary.ignored_files = status.ignored_files;
                 summary.ahead = status.ahead;
                 summary.behind = status.behind;
             }
@@ -423,6 +450,7 @@ fn stale_record_summary(record: WorktreeRecord) -> Worktree {
         is_primary: false,
         tracked_changes: 0,
         untracked_files: 0,
+        ignored_files: 0,
         ahead: None,
         behind: None,
         created_at: record.created_at,
@@ -438,6 +466,7 @@ mod tests {
     use crate::domain::{CreateWorktreeInput, ForestError, RemovalBlocker};
     use crate::git::testing::{init_repository_at, run_git};
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
     fn imported_repo(env: &TempEnv) -> (crate::forest::ForestService, crate::domain::Repository) {
         let service = open_service(env);
@@ -486,6 +515,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/risk-483".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -509,6 +539,7 @@ mod tests {
                 base_ref: "no-such".into(),
                 branch: "feat/new".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect_err("missing base");
         assert!(matches!(missing_base, ForestError::MissingRef(_)));
@@ -519,6 +550,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "main".into(),
                 name: Some("other".into()),
+                copy_local_env_files: false,
             })
             .expect_err("exists");
         assert!(matches!(existing, ForestError::BranchAlreadyExists(_)));
@@ -534,6 +566,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/dirty".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::write(created.worktree.path.join("notes.txt"), "dirty\n").expect("dirty");
@@ -584,6 +617,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/locked".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         crate::git::worktree::lock_worktree(
@@ -658,6 +692,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/session".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         service
@@ -717,6 +752,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/exited-session".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         service
@@ -754,6 +790,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/shared".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("first preview");
         let second_preview = service
@@ -762,6 +799,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/shared".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("second preview");
 
@@ -775,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_requires_force_when_a_worktree_only_contains_ignored_files() {
+    fn ignored_only_worktrees_can_be_removed_without_force() {
         let env = TempEnv::new();
         let (service, repository) = imported_repo(&env);
         fs::write(repository.path.join(".gitignore"), ".env\n").expect("gitignore");
@@ -790,17 +828,26 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/ignored".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::write(created.worktree.path.join(".env"), "SECRET=local\n").expect("ignored file");
 
         let preview = service
-            .worktree_removal_preview(created.worktree.id)
+            .worktree_removal_preview(created.worktree.id.clone())
             .expect("preview");
-        assert!(!preview.allowed);
-        assert!(preview.requires_force);
-        assert!(preview.blockers.contains(&RemovalBlocker::Untracked));
-        assert!(created.worktree.path.exists());
+        assert!(preview.allowed);
+        assert!(!preview.requires_force);
+        assert!(preview.blockers.is_empty());
+        assert_eq!(preview.worktree.ignored_files, 1);
+        assert_eq!(preview.worktree.untracked_files, 0);
+        assert!(!preview.worktree.is_dirty());
+
+        let removed = service
+            .remove_worktree(created.worktree.id.clone(), false)
+            .expect("remove");
+        assert!(removed.removed);
+        assert!(!created.worktree.path.exists());
     }
 
     #[test]
@@ -840,6 +887,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/healthy".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::write(repository.path.join(".git/index"), "corrupt").expect("corrupt primary index");
@@ -875,6 +923,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/detached".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         run_git(&created.worktree.path, &["checkout", "--detach"]);
@@ -899,6 +948,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/missing-dir".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::remove_dir_all(&created.worktree.path).expect("remove directory");
@@ -932,6 +982,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/occupied".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("preview");
         fs::create_dir_all(&preview.destination).expect("occupy destination");
@@ -942,6 +993,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/occupied".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect_err("occupied");
         assert!(matches!(error, ForestError::WorktreePathUnavailable));
@@ -957,6 +1009,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/stale-slot".into(),
                 name: Some("shared-slot".into()),
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::remove_dir_all(&created.worktree.path).expect("remove directory");
@@ -967,6 +1020,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/replacement".into(),
                 name: Some("shared-slot".into()),
+                copy_local_env_files: false,
             })
             .expect_err("stale occupancy");
         assert!(matches!(error, ForestError::WorktreeAlreadyExists));
@@ -985,6 +1039,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/tracked-dirty".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         fs::write(created.worktree.path.join("tracked.txt"), "changed\n").expect("dirty");
@@ -1013,6 +1068,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/clean".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -1036,5 +1092,185 @@ mod tests {
             .output()
             .expect("branch");
         assert!(String::from_utf8_lossy(&branches.stdout).contains("feat/clean"));
+    }
+
+    fn seed_local_env_files(repo: &std::path::Path) {
+        fs::write(repo.join(".gitignore"), ".env*\n.cache\n").expect("gitignore");
+        run_git(repo, &["add", ".gitignore"]);
+        run_git(repo, &["commit", "-m", "ignore local environment"]);
+        fs::write(repo.join(".env"), "SECRET=root\n").expect(".env");
+        fs::write(repo.join(".env.local"), "SECRET=local\n").expect(".env.local");
+        fs::write(repo.join(".env.development"), "SECRET=dev\n").expect(".env.development");
+        fs::write(repo.join(".env.development.local"), "SECRET=devlocal\n")
+            .expect(".env.development.local");
+        fs::write(repo.join(".env.example"), "EXAMPLE=1\n").expect("example");
+        fs::write(repo.join(".env.sample"), "SAMPLE=1\n").expect("sample");
+        run_git(repo, &["add", "-f", ".env.sample"]);
+        run_git(repo, &["commit", "-m", "tracked env sample"]);
+        fs::write(repo.join(".cache"), "cache\n").expect("cache");
+        fs::create_dir_all(repo.join("nested")).expect("nested");
+        fs::write(repo.join("nested/.env"), "SECRET=nested\n").expect("nested");
+    }
+
+    #[test]
+    fn preview_discovers_ignored_root_env_files_without_side_effects() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        seed_local_env_files(&repository.path);
+        std::os::unix::fs::symlink("/tmp/secret", repository.path.join(".env.staging"))
+            .expect("symlink");
+        fs::write(
+            repository.path.join(".env.huge"),
+            vec![0u8; 1024 * 1024 + 1],
+        )
+        .expect("huge");
+
+        let preview = service
+            .preview_create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/seed-preview".into(),
+                name: None,
+                copy_local_env_files: true,
+            })
+            .expect("preview");
+        let names: Vec<_> = preview
+            .local_env_files
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                ".env",
+                ".env.development",
+                ".env.development.local",
+                ".env.local",
+            ]
+        );
+        assert!(preview
+            .local_env_files
+            .iter()
+            .all(|item| item.size_bytes > 0));
+        assert!(!preview.destination.exists());
+        assert!(!repository.path.join("feat-seed-preview").exists());
+    }
+
+    #[test]
+    fn create_copies_local_env_files_when_enabled_and_skips_when_disabled() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        seed_local_env_files(&repository.path);
+
+        let copied = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/seed-on".into(),
+                name: None,
+                copy_local_env_files: true,
+            })
+            .expect("copy on");
+        assert_eq!(
+            copied.local_env_copy.copied,
+            vec![
+                ".env".to_owned(),
+                ".env.development".to_owned(),
+                ".env.development.local".to_owned(),
+                ".env.local".to_owned(),
+            ]
+        );
+        assert!(copied.local_env_copy.failures.is_empty());
+        assert_eq!(
+            fs::read_to_string(copied.worktree.path.join(".env")).expect("copied env"),
+            "SECRET=root\n"
+        );
+        assert_eq!(
+            fs::read_to_string(copied.worktree.path.join(".env.local")).expect("copied local"),
+            "SECRET=local\n"
+        );
+        assert!(!copied.worktree.path.join(".env.example").exists());
+        assert!(!copied.worktree.path.join(".cache").exists());
+        assert!(!copied.worktree.path.join("nested/.env").exists());
+        assert_eq!(copied.worktree.ignored_files, 4);
+        assert_eq!(copied.worktree.untracked_files, 0);
+        assert!(!copied.worktree.is_dirty());
+
+        fs::write(copied.worktree.path.join(".env"), "SECRET=worktree\n")
+            .expect("independent edit");
+        assert_eq!(
+            fs::read_to_string(repository.path.join(".env")).expect("root unchanged"),
+            "SECRET=root\n"
+        );
+
+        let skipped = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/seed-off".into(),
+                name: None,
+                copy_local_env_files: false,
+            })
+            .expect("copy off");
+        assert!(skipped.local_env_copy.copied.is_empty());
+        assert!(skipped.local_env_copy.failures.is_empty());
+        assert!(!skipped.worktree.path.join(".env").exists());
+        assert_eq!(skipped.worktree.ignored_files, 0);
+    }
+
+    #[test]
+    fn create_returns_structured_copy_failure_without_failing_the_command() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        fs::write(repository.path.join(".gitignore"), ".env\n").expect("gitignore");
+        run_git(&repository.path, &["add", ".gitignore"]);
+        run_git(
+            &repository.path,
+            &["commit", "-m", "ignore local environment"],
+        );
+        let source = repository.path.join(".env");
+        fs::write(&source, "SECRET=hidden\n").expect("env");
+        fs::set_permissions(&source, std::fs::Permissions::from_mode(0o000)).expect("chmod");
+
+        let result = service.create_worktree(CreateWorktreeInput {
+            repository_id: repository.id.clone(),
+            base_ref: "main".into(),
+            branch: "feat/seed-fail".into(),
+            name: None,
+            copy_local_env_files: true,
+        });
+        fs::set_permissions(&source, std::fs::Permissions::from_mode(0o644)).expect("restore");
+        let created = result.expect("create still succeeds");
+        assert!(created.worktree.path.is_dir());
+        assert!(created.local_env_copy.copied.is_empty());
+        assert_eq!(created.local_env_copy.failures.len(), 1);
+        assert_eq!(created.local_env_copy.failures[0].path, ".env");
+        assert_eq!(created.local_env_copy.failures[0].error.code, "io");
+        assert!(!created.worktree.path.join(".env").exists());
+    }
+
+    #[test]
+    fn untracked_files_still_require_force_removal() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/untracked".into(),
+                name: None,
+                copy_local_env_files: false,
+            })
+            .expect("create");
+        fs::write(created.worktree.path.join("notes.txt"), "new\n").expect("untracked");
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(!preview.allowed);
+        assert!(preview.requires_force);
+        assert!(preview.blockers.contains(&RemovalBlocker::Untracked));
+        assert_eq!(preview.worktree.untracked_files, 1);
+        assert_eq!(preview.worktree.ignored_files, 0);
     }
 }
