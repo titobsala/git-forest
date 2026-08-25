@@ -4,7 +4,9 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::settings::parse_rfc3339;
-use crate::domain::{ForestError, Repository, RepositoryId, RepositoryMode};
+use crate::domain::{ForestError, Repository, RepositoryHealth, RepositoryId, RepositoryMode};
+
+const REPOSITORY_COLUMNS: &str = "id, name, path, mode, primary_branch, remote_url, last_refreshed_at, health, health_detail, last_reconciled_at, created_at, updated_at";
 
 type RepositoryRow = (
     String,
@@ -15,15 +17,18 @@ type RepositoryRow = (
     Option<String>,
     Option<String>,
     String,
+    Option<String>,
+    Option<String>,
+    String,
     String,
 );
 
 pub fn list_repositories(conn: &Connection) -> Result<Vec<Repository>, ForestError> {
-    let mut statement = conn.prepare(
-        "SELECT id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at
+    let mut statement = conn.prepare(&format!(
+        "SELECT {REPOSITORY_COLUMNS}
          FROM repositories
-         ORDER BY name COLLATE NOCASE, path",
-    )?;
+         ORDER BY name COLLATE NOCASE, path"
+    ))?;
     let rows = statement.query_map([], read_row)?;
     let mut repositories = Vec::new();
     for row in rows {
@@ -35,9 +40,11 @@ pub fn list_repositories(conn: &Connection) -> Result<Vec<Repository>, ForestErr
 pub fn find_by_path(conn: &Connection, path: &Path) -> Result<Option<Repository>, ForestError> {
     let row = conn
         .query_row(
-            "SELECT id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at
-             FROM repositories
-             WHERE path = ?1",
+            &format!(
+                "SELECT {REPOSITORY_COLUMNS}
+                 FROM repositories
+                 WHERE path = ?1"
+            ),
             [path.to_string_lossy().as_ref()],
             read_row,
         )
@@ -51,9 +58,11 @@ pub fn find_by_path(conn: &Connection, path: &Path) -> Result<Option<Repository>
 pub fn find_by_id(conn: &Connection, id: &RepositoryId) -> Result<Option<Repository>, ForestError> {
     let row = conn
         .query_row(
-            "SELECT id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at
-             FROM repositories
-             WHERE id = ?1",
+            &format!(
+                "SELECT {REPOSITORY_COLUMNS}
+                 FROM repositories
+                 WHERE id = ?1"
+            ),
             [id.as_str()],
             read_row,
         )
@@ -67,8 +76,9 @@ pub fn find_by_id(conn: &Connection, id: &RepositoryId) -> Result<Option<Reposit
 pub fn insert_repository(conn: &Connection, repository: &Repository) -> Result<(), ForestError> {
     conn.execute(
         "INSERT INTO repositories (
-            id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            id, name, path, mode, primary_branch, remote_url, last_refreshed_at,
+            health, health_detail, last_reconciled_at, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             repository.id.as_str(),
             repository.name,
@@ -77,6 +87,9 @@ pub fn insert_repository(conn: &Connection, repository: &Repository) -> Result<(
             repository.primary_branch,
             repository.remote_url,
             rfc3339_opt(repository.last_refreshed_at),
+            repository.health.as_str(),
+            repository.health_detail,
+            rfc3339_opt(repository.last_reconciled_at),
             repository.created_at.to_rfc3339(),
             repository.updated_at.to_rfc3339()
         ],
@@ -93,7 +106,10 @@ pub fn update_repository(conn: &Connection, repository: &Repository) -> Result<(
             primary_branch = ?5,
             remote_url = ?6,
             last_refreshed_at = ?7,
-            updated_at = ?8
+            health = ?8,
+            health_detail = ?9,
+            last_reconciled_at = ?10,
+            updated_at = ?11
          WHERE id = ?1",
         params![
             repository.id.as_str(),
@@ -103,6 +119,9 @@ pub fn update_repository(conn: &Connection, repository: &Repository) -> Result<(
             repository.primary_branch,
             repository.remote_url,
             rfc3339_opt(repository.last_refreshed_at),
+            repository.health.as_str(),
+            repository.health_detail,
+            rfc3339_opt(repository.last_reconciled_at),
             repository.updated_at.to_rfc3339()
         ],
     )?;
@@ -128,11 +147,27 @@ fn read_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RepositoryRow> {
         row.get(6)?,
         row.get(7)?,
         row.get(8)?,
+        row.get(9)?,
+        row.get(10)?,
+        row.get(11)?,
     ))
 }
 
 fn map_repository(
-    (id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at): RepositoryRow,
+    (
+        id,
+        name,
+        path,
+        mode,
+        primary_branch,
+        remote_url,
+        last_refreshed_at,
+        health,
+        health_detail,
+        last_reconciled_at,
+        created_at,
+        updated_at,
+    ): RepositoryRow,
 ) -> Result<Repository, ForestError> {
     Ok(Repository {
         id: RepositoryId::from_string(id),
@@ -142,6 +177,11 @@ fn map_repository(
         primary_branch,
         remote_url,
         last_refreshed_at: last_refreshed_at
+            .map(|value| parse_rfc3339(&value))
+            .transpose()?,
+        health: RepositoryHealth::parse(&health).map_err(ForestError::Database)?,
+        health_detail,
+        last_reconciled_at: last_reconciled_at
             .map(|value| parse_rfc3339(&value))
             .transpose()?,
         created_at: parse_rfc3339(&created_at)?,

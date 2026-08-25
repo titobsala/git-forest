@@ -128,6 +128,11 @@ pub fn remove_worktree(
     Ok(())
 }
 
+pub fn prune_worktrees(git: &GitRunner, repo: &Path) -> Result<(), ForestError> {
+    git.run_success(repo, &["worktree", "prune", "--verbose", "--expire", "now"])?;
+    Ok(())
+}
+
 #[cfg(test)]
 pub fn lock_worktree(
     git: &GitRunner,
@@ -160,8 +165,8 @@ pub fn path_in_use(worktrees: &[GitWorktree], path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        add_worktree, list_worktrees, lock_worktree, parse_worktree_list, remove_worktree,
-        WorktreeAddRequest,
+        add_worktree, list_worktrees, lock_worktree, parse_worktree_list, prune_worktrees,
+        remove_worktree, WorktreeAddRequest,
     };
     use crate::domain::ForestError;
     use crate::git::runner::GitRunner;
@@ -254,6 +259,29 @@ mod tests {
             .expect("extra");
         assert!(extra_record.locked);
         assert_eq!(extra_record.lock_reason.as_deref(), Some("busy"));
+    }
+
+    #[test]
+    fn prune_removes_a_missing_worktree_record_without_deleting_present_directories() {
+        let env = TempGit::new();
+        let repo = env.init_repo("app");
+        env.commit_file(&repo, "README.md", "hello\n", "initial");
+        let extra = env.add_worktree(&repo, "extra", "feat/extra", "main");
+        let present = extra.clone();
+        fs::remove_dir_all(&extra).expect("remove extra directory");
+
+        let listed = list_worktrees(&GitRunner::new(), &repo).expect("list");
+        let missing = listed
+            .iter()
+            .find(|item| item.path == extra)
+            .expect("prunable record");
+        assert!(missing.prunable);
+
+        prune_worktrees(&GitRunner::new(), &repo).expect("prune");
+        let remaining = list_worktrees(&GitRunner::new(), &repo).expect("after prune");
+        assert!(!remaining.iter().any(|item| item.path == extra));
+        assert!(repo.is_dir());
+        assert!(!present.exists());
     }
 
     fn run_git_branches(repo: &std::path::Path) -> String {

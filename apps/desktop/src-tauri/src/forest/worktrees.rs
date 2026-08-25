@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 
 use crate::domain::{
-    CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult, ForestError, RemovalBlocker,
-    RemoveWorktreeResult, Repository, RepositoryId, Worktree, WorktreeId, WorktreeRemovalPreview,
+    CommandError, CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult, ForestError,
+    RemovalBlocker, RemoveWorktreeResult, Repository, RepositoryId, Worktree, WorktreeId,
+    WorktreeRemovalPreview,
 };
 use crate::git::refs::{branch_exists, resolve_commit, validate_branch_name, LocalBranch};
 use crate::git::status::inspect_worktree_status;
@@ -120,6 +121,9 @@ impl ForestService {
             });
         }
 
+        if force {
+            log::info!("force-removing worktree {}", worktree.id.as_str());
+        }
         crate::git::worktree::remove_worktree(&self.git, &repository.path, &worktree.path, force)?;
         delete_worktree(self.db.connection(), &worktree.id)?;
         Ok(RemoveWorktreeResult {
@@ -246,6 +250,9 @@ impl ForestService {
         if worktree.untracked_files > 0 {
             blockers.push(RemovalBlocker::Untracked);
         }
+        if worktree.status_error.is_some() {
+            blockers.push(RemovalBlocker::StatusUnavailable);
+        }
         if has_active_session(self.db.connection(), &worktree.id)? {
             blockers.push(RemovalBlocker::ActiveSession);
         }
@@ -265,7 +272,10 @@ impl ForestService {
         })
     }
 
-    fn reconcile_worktrees(&self, repository: &Repository) -> Result<Vec<Worktree>, ForestError> {
+    pub(super) fn reconcile_worktrees(
+        &self,
+        repository: &Repository,
+    ) -> Result<Vec<Worktree>, ForestError> {
         let git_worktrees = crate::git::worktree::list_worktrees(&self.git, &repository.path)?;
         let stored = list_by_repository(self.db.connection(), &repository.id)?;
         let mut leftover: HashMap<PathBuf, WorktreeRecord> = stored
@@ -304,11 +314,11 @@ impl ForestService {
             let record =
                 find_by_repository_and_path(self.db.connection(), &repository.id, &record.path)?
                     .unwrap_or(record);
-            summaries.push(summarize(&record, Some(&git_worktree), &self.git)?);
+            summaries.push(summarize(&record, Some(&git_worktree), &self.git));
         }
 
         for record in leftover.into_values() {
-            summaries.push(missing_summary(record));
+            summaries.push(stale_record_summary(record));
         }
 
         summaries.sort_by(|left, right| {
@@ -339,7 +349,7 @@ fn summarize(
     record: &WorktreeRecord,
     git_worktree: Option<&GitWorktree>,
     git: &crate::git::GitRunner,
-) -> Result<Worktree, ForestError> {
+) -> Worktree {
     let present = record.path.is_dir();
     let git_known = git_worktree.is_some();
     let is_primary = record.path.join(".git").is_dir();
@@ -356,6 +366,7 @@ fn summarize(
         locked: git_worktree.is_some_and(|item| item.locked),
         lock_reason: git_worktree.and_then(|item| item.lock_reason.clone()),
         prunable: git_worktree.is_some_and(|item| item.prunable),
+        prunable_reason: git_worktree.and_then(|item| item.prunable_reason.clone()),
         present,
         git_known,
         is_primary,
@@ -366,35 +377,48 @@ fn summarize(
         created_at: record.created_at,
         updated_at: record.updated_at,
         last_used_at: record.last_used_at,
+        status_error: None,
     };
 
-    if present {
-        let status = inspect_worktree_status(git, &record.path)?;
-        if summary.branch.is_none() {
-            summary.branch = status.branch;
+    if present && git_known {
+        match inspect_worktree_status(git, &record.path) {
+            Ok(status) => {
+                if summary.branch.is_none() {
+                    summary.branch = status.branch;
+                }
+                summary.detached = summary.detached || status.detached;
+                summary.tracked_changes = status.tracked_changes;
+                summary.untracked_files = status.untracked_files;
+                summary.ahead = status.ahead;
+                summary.behind = status.behind;
+            }
+            Err(error) => {
+                log::warn!(
+                    "worktree {} status unavailable: {}",
+                    summary.id.as_str(),
+                    error
+                );
+                summary.status_error = Some(CommandError::from(error));
+            }
         }
-        summary.detached = summary.detached || status.detached;
-        summary.tracked_changes = status.tracked_changes;
-        summary.untracked_files = status.untracked_files;
-        summary.ahead = status.ahead;
-        summary.behind = status.behind;
     }
-    Ok(summary)
+    summary
 }
 
-fn missing_summary(record: WorktreeRecord) -> Worktree {
+fn stale_record_summary(record: WorktreeRecord) -> Worktree {
     Worktree {
         id: record.id,
         repository_id: record.repository_id,
         name: record.name,
-        path: record.path,
+        path: record.path.clone(),
         branch: record.branch,
         head: None,
         detached: false,
         locked: false,
         lock_reason: None,
         prunable: false,
-        present: false,
+        prunable_reason: None,
+        present: record.path.is_dir(),
         git_known: false,
         is_primary: false,
         tracked_changes: 0,
@@ -404,6 +428,7 @@ fn missing_summary(record: WorktreeRecord) -> Worktree {
         created_at: record.created_at,
         updated_at: record.updated_at,
         last_used_at: record.last_used_at,
+        status_error: None,
     }
 }
 
@@ -598,13 +623,29 @@ mod tests {
         )
         .expect("insert ghost");
 
-        let worktrees = service.list_worktrees(repository.id).expect("list");
+        let worktrees = service.list_worktrees(repository.id.clone()).expect("list");
         let ghost = worktrees
             .iter()
             .find(|item| item.name == "ghost")
             .expect("ghost");
         assert!(!ghost.present);
         assert!(!ghost.git_known);
+
+        fs::create_dir_all(env.root.join("ghost")).expect("present unknown dir");
+        let worktrees = service
+            .list_worktrees(repository.id)
+            .expect("list present unknown");
+        let ghost = worktrees
+            .iter()
+            .find(|item| item.name == "ghost")
+            .expect("ghost present");
+        assert!(ghost.present);
+        assert!(!ghost.git_known);
+        let preview = service
+            .worktree_removal_preview(ghost.id.clone())
+            .expect("blocked unknown");
+        assert!(preview.blockers.contains(&RemovalBlocker::UnknownToGit));
+        assert!(!preview.requires_force);
     }
 
     #[test]
@@ -763,15 +804,65 @@ mod tests {
     }
 
     #[test]
-    fn status_failures_are_propagated_during_reconciliation() {
+    fn status_failures_are_isolated_during_reconciliation() {
         let env = TempEnv::new();
         let (service, repository) = imported_repo(&env);
         fs::write(repository.path.join(".git/index"), "corrupt").expect("corrupt index");
 
-        let error = service
+        let worktrees = service
             .list_worktrees(repository.id)
-            .expect_err("status failure");
-        assert!(matches!(error, ForestError::GitCommandFailed(_)));
+            .expect("isolated status failure");
+        let primary = worktrees
+            .iter()
+            .find(|item| item.is_primary)
+            .expect("primary");
+        assert!(primary.status_error.is_some());
+        assert_eq!(
+            primary.status_error.as_ref().unwrap().code,
+            "git_command_failed"
+        );
+        let preview = service
+            .worktree_removal_preview(primary.id.clone())
+            .expect("preview");
+        assert!(preview
+            .blockers
+            .contains(&RemovalBlocker::StatusUnavailable));
+        assert!(!preview.requires_force);
+    }
+
+    #[test]
+    fn one_corrupt_worktree_does_not_hide_a_healthy_worktree() {
+        let env = TempEnv::new();
+        let (service, repository) = imported_repo(&env);
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id.clone(),
+                base_ref: "main".into(),
+                branch: "feat/healthy".into(),
+                name: None,
+            })
+            .expect("create");
+        fs::write(repository.path.join(".git/index"), "corrupt").expect("corrupt primary index");
+
+        let worktrees = service
+            .list_worktrees(repository.id)
+            .expect("both worktrees");
+        let primary = worktrees
+            .iter()
+            .find(|item| item.is_primary)
+            .expect("primary");
+        let healthy = worktrees
+            .iter()
+            .find(|item| item.id == created.worktree.id)
+            .expect("healthy");
+        assert!(primary.status_error.is_some());
+        assert_eq!(
+            primary.status_error.as_ref().unwrap().code,
+            "git_command_failed"
+        );
+        assert!(healthy.status_error.is_none());
+        assert!(healthy.present);
+        assert!(healthy.git_known);
     }
 
     #[test]

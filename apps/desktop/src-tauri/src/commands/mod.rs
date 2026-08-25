@@ -6,6 +6,7 @@ use crate::AppState;
 
 pub mod agents;
 pub mod app_info;
+pub mod cleanup;
 pub mod forest;
 pub mod repositories;
 pub mod scan;

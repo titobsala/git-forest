@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../lib/errors";
+import { isRepositoryAvailable } from "../lib/repository-health";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import type {
   Repository,
@@ -91,6 +92,10 @@ export function useWorktreeIndex(
   const paused = options.paused ?? false;
 
   const [entries, setEntries] = useState<IndexState>({});
+  const repositoriesRef = useRef(repositories);
+  repositoriesRef.current = repositories;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   // Mirror of the per-repository status, readable synchronously so callbacks
   // can decide whether to queue a load without touching the state updater.
@@ -137,12 +142,15 @@ export function useWorktreeIndex(
 
   /** Run queued listings one at a time until the queue empties. */
   const drain = useCallback(async () => {
-    if (running.current) {
+    if (running.current || pausedRef.current) {
       return;
     }
     running.current = true;
     try {
       for (;;) {
+        if (pausedRef.current) {
+          return;
+        }
         const next = queue.current.shift();
         if (!next) {
           return;
@@ -156,6 +164,10 @@ export function useWorktreeIndex(
 
   const enqueue = useCallback(
     (id: RepositoryId, mode: LoadMode, priority: "user" | "background") => {
+      const repository = repositoriesRef.current.find((item) => item.id === id);
+      if (!repository || !isRepositoryAvailable(repository)) {
+        return;
+      }
       if (statuses.current.get(id) === "loading") {
         // Already queued or in flight. A refresh still upgrades a plain
         // listing that has not started yet, so the newer intent wins.
@@ -202,6 +214,15 @@ export function useWorktreeIndex(
   const refresh = useCallback(
     (id: RepositoryId) => {
       enqueue(id, "refresh", "user");
+    },
+    [enqueue],
+  );
+
+  const refreshAll = useCallback(
+    (repositoryIds: RepositoryId[]) => {
+      for (const id of repositoryIds) {
+        enqueue(id, "refresh", "user");
+      }
     },
     [enqueue],
   );
@@ -258,6 +279,12 @@ export function useWorktreeIndex(
     });
   }, []);
 
+  useEffect(() => {
+    if (!paused) {
+      void drain();
+    }
+  }, [paused, drain]);
+
   // Background pass: queue at most one repository per idle slot, and only once
   // the queue has drained. Each completed load updates `entries`, which
   // re-runs this effect for the next repository.
@@ -267,6 +294,7 @@ export function useWorktreeIndex(
     }
     const pending = repositories.find(
       (repository) =>
+        isRepositoryAvailable(repository) &&
         (statuses.current.get(repository.id) ?? "idle") === "idle",
     );
     if (!pending) {
@@ -297,6 +325,7 @@ export function useWorktreeIndex(
     entryFor,
     ensureLoaded,
     refresh,
+    refreshAll,
     setWorktrees,
     touchWorktree,
     forget,

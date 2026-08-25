@@ -4,11 +4,11 @@ Keyboard-first desktop control plane for Git worktrees and coding-agent sessions
 
 Git Forest is **not** a full Git client, IDE, or terminal. It connects repositories, worktrees, terminals, and CLI coding agents so a developer can move between isolated workspaces quickly.
 
-This repository is at **Release 0.0.8** — a runnable Linux desktop app that can index local Git repositories, scan folders, create, inspect, and safely remove Git worktrees, open a worktree in Warp, launch Codex, Claude Code, or OpenCode in that worktree, invoke Quick Launch from anywhere with `Super + W`, and track those agent sessions against Linux `/proc`.
+This repository is at **Release 0.1.0** — a local Linux internal alpha. It can index local Git repositories, survive missing, moved, invalid, or unavailable checkouts, create, inspect, and safely remove Git worktrees, preview and run metadata cleanup, open a worktree in Warp, launch Codex, Claude Code, or OpenCode, invoke Quick Launch from anywhere with `Super + W`, and track those agent sessions against Linux `/proc`. 0.0.9 was an internal safety gate and is not a separately versioned package.
 
 ## Prerequisites
 
-The 0.0.8 desktop app targets **Linux** first.
+The 0.1.0 desktop app targets **Linux** first.
 
 You need:
 
@@ -55,7 +55,7 @@ That opens the Git Forest window:
 ```text
 Git Forest
 
-Version 0.0.8
+Version 0.1.0
 
 Worktrees in reach.
 ```
@@ -71,7 +71,7 @@ The window shows Forest status and configuration, then lets you:
 - launch the configured default agent (Codex, Claude Code, or OpenCode) in that worktree, then see the session on the cockpit badge, Agents filter, monitor, and tray;
 - invoke Quick Launch with `Super + W` (or `Ctrl/Cmd + K` while Forest is focused), search repositories and worktrees, and open a worktree in Warp with Enter.
 
-Restarting the app keeps that index. Schema version 4 adds `agent_sessions.process_start_ticks` so a reused PID is not treated as the original process. Schema version 3 adds `worktrees.last_used_at` for launcher recency without dropping earlier rows. Schema version 2 added repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`).
+Restarting the app keeps that index. Schema version 5 adds cached repository `health`, `health_detail`, and `last_reconciled_at` (existing rows migrate to `unknown`). Schema version 4 adds `agent_sessions.process_start_ticks` so a reused PID is not treated as the original process. Schema version 3 adds `worktrees.last_used_at` for launcher recency without dropping earlier rows. Schema version 2 added repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`).
 
 Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>`, so repositories with the same name remain isolated. Removing a repository or a clean worktree never deletes Git branches; worktrees containing tracked, untracked, or ignored local changes require an explicit force action.
 
@@ -79,17 +79,21 @@ Limitations in this release:
 
 - new imports are Linked only (existing Managed records still load);
 - worktree creation always makes a new branch from a local base (no attach-existing-branch yet);
-- primary, locked, missing, and Git-unknown worktrees cannot be removed;
+- primary, locked, missing, Git-unknown, and status-unavailable worktrees cannot be ordinarily removed;
+- a missing repository is shown as “Missing or moved” and must be located by the user — Forest does not scan the filesystem for it;
+- cleanup is metadata/artifact maintenance: it never deletes a present worktree directory or a foreign Warp file;
 - Warp is the only terminal provider;
 - if `Super + W` is already taken by the desktop environment, Forest logs a warning and `Ctrl/Cmd + K` still toggles Quick Launch;
 - agent session status is approximate (a Warp URI launch may be `unknown` when `/proc` never shows a matching process);
 - custom-agent management and generic `WorkspaceSession` (terminal/editor activity) are not implemented.
 
-The desktop capability set is `core:default`, `dialog:allow-open` for native directory pickers, and narrow window show/hide/focus permissions for the global launcher. `Super + W` is registered in Rust; the UI never receives a generic shortcut or shell command.
+The desktop capability set is `core:default`, `dialog:allow-open` for native directory pickers, `log:default` for rolling local logs, and narrow window show/hide/focus permissions for the global launcher. `Super + W` is registered in Rust; the UI never receives a generic shortcut or shell command.
 
 JavaScript packages are managed with **Bun only**. Do not add npm, yarn, or pnpm lockfiles.
 
 ## Manual smoke
+
+Use a disposable Git repository with an initial `main` commit. Never use a developer repository for destructive scenarios.
 
 After `bun run dev`:
 
@@ -97,13 +101,15 @@ After `bun run dev`:
 2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.
 3. Search by name, path, branch, or remote; refresh metadata; restart and confirm the index remains.
 4. Remove a repository from Forest and confirm the directory is still on disk.
-5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>-<repository-id>/`.
-6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists.
+5. Select a repository, create a worktree with a new branch from a local base, and confirm it appears under `~/forest/worktrees/<repository-slug>-<repository-id>/`. After creation, choose Codex (or Create only). Unavailable agents stay visible but disabled as Missing.
+6. Make the worktree dirty, confirm ordinary removal is blocked, force-remove it, and confirm the branch still exists. Status-unavailable and Git-unknown rows omit ordinary remove.
 7. With Warp installed, open a worktree from the cockpit (`Enter` or the row action) and confirm a tab opens at that path.
-8. With Codex, Claude Code, or OpenCode on `PATH`, launch the default agent (`⌥A` or the row action) and confirm Warp starts that command in the worktree. Settings should show Installed/Missing next to each built-in.
+8. With Codex, Claude Code, or OpenCode on `PATH`, launch the default agent (`⌥A` or the row action) and confirm Warp starts that command in the worktree. Settings should show Installed/Missing next to each built-in. If launch fails after create, Retry launch must not create a second worktree.
 9. Press `Super + W` from another app while Forest is hidden: the window appears, Quick Launch is open, and search is focused. Press it again: the overlay closes and the window hides. `Ctrl/Cmd + K` still toggles the overlay without hiding Forest.
 10. Search a worktree, press Enter, confirm Warp opens at that path, then reopen Quick Launch with an empty query and confirm that worktree ranks above unused ones.
 11. Launch two agents in one worktree: the row shows one primary badge, the monitor lists both, and the tray/Agents filter count active sessions. Terminate one process, wait up to ten seconds (or hide and show Forest), and confirm reconciliation. Restart Forest and confirm sessions are `running`, `exited`, or `unknown`. Active sessions block worktree removal; exited/unknown sessions do not.
+12. Move a linked repository, confirm Forest shows “Missing or moved”, then Locate it with the directory picker and confirm worktrees return. Do not expect Forest to scan the disk for it.
+13. In Settings → Maintenance, preview cleanup, cancel with Escape, then execute selected categories. Confirm Git prune, stale Forest rows, exited/failed sessions, and generated `git-forest-*.toml` files are the only removals, and present directories plus foreign Warp files remain.
 
 ## Commands
 

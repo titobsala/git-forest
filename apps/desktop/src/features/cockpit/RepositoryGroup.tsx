@@ -16,6 +16,12 @@ import type {
 } from "../../types/forest";
 import type { WorktreeIndexEntry } from "../../hooks/useWorktreeIndex";
 import { ChevronIcon } from "../../components/shell/icons";
+import {
+  canLocateRepository,
+  isRepositoryAvailable,
+  repositoryHealthBadgeClass,
+  repositoryHealthText,
+} from "../../lib/repository-health";
 import { WorktreeRow } from "./WorktreeRow";
 
 interface RepositoryGroupProps {
@@ -38,6 +44,7 @@ interface RepositoryGroupProps {
   onLaunchAgent?: (worktree: Worktree) => void;
   sessionFor?: (worktreeId: WorktreeId) => AgentSession | null;
   agentNameFor?: (agentId: AgentDefinitionId) => string;
+  onLocate?: (id: RepositoryId) => void;
 }
 
 export function RepositoryGroup({
@@ -58,6 +65,7 @@ export function RepositoryGroup({
   onLaunchAgent,
   sessionFor,
   agentNameFor,
+  onLocate,
 }: RepositoryGroupProps) {
   useEffect(() => {
     if (!collapsed) {
@@ -86,24 +94,42 @@ export function RepositoryGroup({
           <span className="truncate text-heading text-ink">
             {repository.name}
           </span>
-          <span className="gf-badge gf-badge-neutral shrink-0">
-            {entry.status === "ready"
-              ? worktrees.length === totalCount
-                ? `${totalCount} worktrees`
-                : `${worktrees.length} of ${totalCount}`
-              : entry.status === "loading"
-                ? "loading…"
-                : "—"}
-          </span>
+          {isRepositoryAvailable(repository) ? (
+            <span className="gf-badge gf-badge-neutral shrink-0">
+              {entry.status === "ready"
+                ? worktrees.length === totalCount
+                  ? `${totalCount} worktrees`
+                  : `${worktrees.length} of ${totalCount}`
+                : entry.status === "loading"
+                  ? "loading…"
+                  : "—"}
+            </span>
+          ) : (
+            <span
+              className={`${repositoryHealthBadgeClass(repository.health)} shrink-0`}
+            >
+              {repositoryHealthText(repository)}
+            </span>
+          )}
         </button>
-        <button
-          type="button"
-          onClick={() => refresh(repository.id)}
-          className="mr-2 rounded-sm px-1.5 py-0.5 font-mono text-micro text-ink-muted hover:bg-canvas hover:text-ink"
-          title={`Refresh worktrees for ${repository.name}`}
-        >
-          ⟳
-        </button>
+        {canLocateRepository(repository) && onLocate ? (
+          <button
+            type="button"
+            onClick={() => onLocate(repository.id)}
+            className="mr-2 rounded-sm px-1.5 py-0.5 font-mono text-micro text-ink hover:bg-canvas"
+          >
+            Locate repository…
+          </button>
+        ) : isRepositoryAvailable(repository) ? (
+          <button
+            type="button"
+            onClick={() => refresh(repository.id)}
+            className="mr-2 rounded-sm px-1.5 py-0.5 font-mono text-micro text-ink-muted hover:bg-canvas hover:text-ink"
+            title={`Refresh worktrees for ${repository.name}`}
+          >
+            ⟳
+          </button>
+        ) : null}
       </h3>
 
       {collapsed ? null : (
@@ -144,10 +170,14 @@ export function RepositoryGroup({
                       : undefined
                   }
                   onOpenTerminal={
-                    onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
+                    worktree.present && onOpenTerminal
+                      ? () => onOpenTerminal(worktree)
+                      : undefined
                   }
                   onLaunchAgent={
-                    onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
+                    worktree.present && onLaunchAgent
+                      ? () => onLaunchAgent(worktree)
+                      : undefined
                   }
                 />
               );

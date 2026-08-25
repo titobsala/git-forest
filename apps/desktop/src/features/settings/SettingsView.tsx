@@ -26,6 +26,7 @@ import type {
   RepositoryId,
   ThemePreference,
 } from "../../types/forest";
+import { MaintenancePanel } from "./MaintenancePanel";
 
 interface SettingsViewProps {
   state: ForestState;
@@ -41,6 +42,9 @@ interface SettingsViewProps {
   onImportRepositories: (paths: string[]) => Promise<ImportRepositoriesResult>;
   onRefreshRepository: (id: RepositoryId) => void;
   onRemoveRepository: (id: RepositoryId) => void;
+  onLocateRepository: (id: RepositoryId) => void;
+  onRefreshForest: () => void;
+  onCleanupComplete: (state: ForestState) => void;
 }
 
 export function SettingsView({
@@ -56,6 +60,9 @@ export function SettingsView({
   onImportRepositories,
   onRefreshRepository,
   onRemoveRepository,
+  onLocateRepository,
+  onRefreshForest,
+  onCleanupComplete,
 }: SettingsViewProps) {
   const panels = {
     link: useRef<HTMLDivElement>(null),
@@ -84,6 +91,11 @@ export function SettingsView({
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       <div className="mx-auto flex max-w-3xl flex-col gap-3">
         <ForestStatusPanel state={state} />
+        <MaintenancePanel
+          busy={busy}
+          onRefreshForest={onRefreshForest}
+          onCleanupComplete={onCleanupComplete}
+        />
         <ConfigurationPanel
           state={state}
           busy={busy}
@@ -104,6 +116,7 @@ export function SettingsView({
             onSelect={onSelect}
             onRefresh={onRefreshRepository}
             onRemove={onRemoveRepository}
+            onLocate={onLocateRepository}
           />
         </div>
       </div>

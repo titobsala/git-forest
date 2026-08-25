@@ -57,3 +57,17 @@ pub fn remove_repository(
 ) -> Result<ForestState, CommandError> {
     with_forest(&state, |forest| forest.remove_repository(id))
 }
+
+#[tauri::command]
+pub fn reconcile_repositories(state: State<'_, AppState>) -> Result<ForestState, CommandError> {
+    with_forest(&state, |forest| forest.reconcile_repositories())
+}
+
+#[tauri::command]
+pub fn relocate_repository(
+    state: State<'_, AppState>,
+    id: RepositoryId,
+    path: PathBuf,
+) -> Result<ForestState, CommandError> {
+    with_forest(&state, |forest| forest.relocate_repository(id, path))
+}

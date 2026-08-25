@@ -105,6 +105,25 @@ pub fn count_active_sessions(conn: &Connection) -> Result<i64, ForestError> {
     Ok(count)
 }
 
+pub fn list_finished_sessions(conn: &Connection) -> Result<Vec<AgentSession>, ForestError> {
+    let mut statement = conn.prepare(&format!(
+        "SELECT {SESSION_COLUMNS} FROM agent_sessions
+         WHERE status IN ('exited', 'failed')
+         ORDER BY launched_at DESC, id DESC"
+    ))?;
+    let rows = statement.query_map([], read_row)?;
+    rows.map(|row| map_session(row?))
+        .collect::<Result<Vec<_>, _>>()
+}
+
+pub fn delete_finished_sessions(conn: &Connection) -> Result<u32, ForestError> {
+    let changed = conn.execute(
+        "DELETE FROM agent_sessions WHERE status IN ('exited', 'failed')",
+        [],
+    )?;
+    Ok(changed as u32)
+}
+
 type SessionRow = (
     String,
     String,

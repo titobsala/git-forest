@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "../components/shell/AppShell";
 import { InspectorPanel } from "../components/shell/InspectorPanel";
 import { L1Rail } from "../components/shell/L1Rail";
@@ -23,17 +23,22 @@ import { useTheme } from "../hooks/useTheme";
 import { useWorktreeIndex } from "../hooks/useWorktreeIndex";
 import { useAgentSessions } from "../hooks/useAgentSessions";
 import { clipboardAvailable, copyText } from "../lib/clipboard";
-import { errorMessage } from "../lib/errors";
+import { pickDirectory } from "../lib/dialog";
+import { toCommandError } from "../lib/errors";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
+import { isRepositoryAvailable } from "../lib/repository-health";
 import { openWorktreeInTerminal } from "../lib/terminals";
 import { launchAgent } from "../lib/agents";
 import {
   importRepositories,
   importRepository,
+  reconcileRepositories,
   refreshRepository,
+  relocateRepository,
   removeRepository,
 } from "../lib/repositories";
 import type {
+  CommandError,
   ForestConfiguration,
   ForestState,
   ImportRepositoryInput,
@@ -66,11 +71,23 @@ interface Selection {
 
 const EMPTY_SELECTION: Selection = { repositoryId: null, worktreeId: null };
 
+const SETTINGS_RECOVERY_CODES = new Set([
+  "terminal_unavailable",
+  "agent_unavailable",
+]);
+
+function availableRepositoryIds(state: ForestState): RepositoryId[] {
+  return state.repositories
+    .filter((repository) => isRepositoryAvailable(repository))
+    .map((repository) => repository.id);
+}
+
 export function App() {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [state, setState] = useState<ForestState>(FALLBACK_FOREST_STATE);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CommandError | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
 
   const [view, setView] = useState<ViewId>("cockpit");
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
@@ -84,29 +101,59 @@ export function App() {
     null,
   );
 
-  const index = useWorktreeIndex(state.repositories, { paused: busy });
+  const index = useWorktreeIndex(state.repositories, {
+    paused: busy || reconciling,
+  });
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const wasReconciling = useRef(false);
   const sessions = useAgentSessions();
+
+  useEffect(() => {
+    if (wasReconciling.current && !reconciling) {
+      indexRef.current.refreshAll(availableRepositoryIds(state));
+    }
+    wasReconciling.current = reconciling;
+  }, [reconciling, state]);
 
   useTheme(state.configuration.theme);
 
   useEffect(() => {
     let cancelled = false;
 
-    void getForestState()
-      .then((next) => {
-        if (!cancelled) {
-          setState(next);
-          setStatus("ready");
-          setError(null);
+    void (async () => {
+      try {
+        const cached = await getForestState();
+        if (cancelled) {
+          return;
         }
-      })
-      .catch((caught: unknown) => {
+        setState(cached);
+        setStatus("ready");
+        setError(null);
+        setReconciling(true);
+        try {
+          const reconciled = await reconcileRepositories();
+          if (cancelled) {
+            return;
+          }
+          setState(reconciled);
+        } catch (caught: unknown) {
+          if (!cancelled) {
+            setError(toCommandError(caught));
+          }
+        } finally {
+          if (!cancelled) {
+            setReconciling(false);
+          }
+        }
+      } catch (caught: unknown) {
         if (!cancelled) {
           setState(FALLBACK_FOREST_STATE);
           setStatus("error");
-          setError(errorMessage(caught));
+          setError(toCommandError(caught));
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -132,7 +179,7 @@ export function App() {
       setError(null);
       setStatus("ready");
     } catch (caught: unknown) {
-      setError(errorMessage(caught));
+      setError(toCommandError(caught));
     } finally {
       setBusy(false);
     }
@@ -170,7 +217,7 @@ export function App() {
       setStatus("ready");
       return result;
     } catch (caught: unknown) {
-      setError(errorMessage(caught));
+      setError(toCommandError(caught));
       throw caught;
     } finally {
       setBusy(false);
@@ -180,6 +227,35 @@ export function App() {
   async function handleRefreshRepository(id: RepositoryId) {
     await runMutation(() => refreshRepository(id));
     index.refresh(id);
+  }
+
+  async function handleRefreshForest() {
+    setReconciling(true);
+    try {
+      const next = await reconcileRepositories();
+      setState(next);
+      setError(null);
+      index.refreshAll(availableRepositoryIds(next));
+    } catch (caught: unknown) {
+      setError(toCommandError(caught));
+    } finally {
+      setReconciling(false);
+    }
+  }
+
+  async function handleLocateRepository(id: RepositoryId) {
+    const path = await pickDirectory();
+    if (!path) {
+      return;
+    }
+    await runMutation(() => relocateRepository(id, path));
+    index.refresh(id);
+  }
+
+  function handleCleanupComplete(next: ForestState) {
+    setState(next);
+    setError(null);
+    index.refreshAll(availableRepositoryIds(next));
   }
 
   async function handleRemoveRepository(id: RepositoryId) {
@@ -208,6 +284,9 @@ export function App() {
   }
 
   async function handleOpenTerminal(worktree: Worktree) {
+    if (!worktree.present) {
+      return;
+    }
     try {
       const result = await openWorktreeInTerminal(worktree.id);
       if (result.lastUsedAt) {
@@ -215,11 +294,14 @@ export function App() {
       }
       setError(null);
     } catch (caught: unknown) {
-      setError(errorMessage(caught));
+      setError(toCommandError(caught));
     }
   }
 
   async function handleLaunchAgent(worktree: Worktree) {
+    if (!worktree.present) {
+      return;
+    }
     try {
       const result = await launchAgent(worktree.id);
       if (result.lastUsedAt) {
@@ -228,7 +310,7 @@ export function App() {
       await sessions.refresh();
       setError(null);
     } catch (caught: unknown) {
-      setError(errorMessage(caught));
+      setError(toCommandError(caught));
     }
   }
 
@@ -347,9 +429,26 @@ export function App() {
     );
   }
 
+  const errorBanner: ReactNode = error ? (
+    <>
+      <span>{error.message}</span>
+      {SETTINGS_RECOVERY_CODES.has(error.code) ? (
+        <button
+          type="button"
+          className="gf-button ml-2"
+          onClick={() => setView("settings")}
+        >
+          Open Settings
+        </button>
+      ) : null}
+    </>
+  ) : null;
+
+  const settingsBusy = busy || reconciling;
+
   return (
     <AppShell
-      error={error}
+      error={errorBanner}
       topBar={
         <TopBar
           appInfo={state.appInfo}
@@ -391,6 +490,7 @@ export function App() {
           }
           index={index}
           onAddRepository={() => setView("settings")}
+          onLocate={handleLocateRepository}
         />
       }
       inspector={
@@ -441,10 +541,15 @@ export function App() {
           {creatingIn ? (
             <CreateWorktreeDialog
               repository={creatingIn}
+              agentDefinitions={state.agentDefinitions}
+              defaultAgentId={state.configuration.defaultAgentId}
               onClose={() => setCreatingIn(null)}
               onCreated={(worktrees, created) => {
                 index.setWorktrees(creatingIn.id, worktrees);
                 selectWorktree(created, creatingIn);
+              }}
+              onAgentLaunched={() => {
+                void sessions.refresh();
               }}
             />
           ) : null}
@@ -471,6 +576,9 @@ export function App() {
           onLaunchAgent={(worktree) => {
             void handleLaunchAgent(worktree);
           }}
+          onLocateRepository={(id) => {
+            void handleLocateRepository(id);
+          }}
           hasActiveSession={(worktree) =>
             sessions.hasActiveSession(worktree.id)
           }
@@ -486,7 +594,7 @@ export function App() {
       ) : (
         <SettingsView
           state={state}
-          busy={busy}
+          busy={settingsBusy}
           selectedId={selectedId}
           focus={settingsFocus}
           onFocusHandled={() => setSettingsFocus(null)}
@@ -507,6 +615,13 @@ export function App() {
           onRemoveRepository={(id) => {
             void handleRemoveRepository(id);
           }}
+          onLocateRepository={(id) => {
+            void handleLocateRepository(id);
+          }}
+          onRefreshForest={() => {
+            void handleRefreshForest();
+          }}
+          onCleanupComplete={handleCleanupComplete}
         />
       )}
     </AppShell>

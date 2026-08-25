@@ -6,6 +6,11 @@
  */
 
 import { useMemo, useState } from "react";
+import {
+  canLocateRepository,
+  repositoryHealthBadgeClass,
+  repositoryHealthText,
+} from "../../lib/repository-health";
 import { repositoryMatches } from "../../lib/search";
 import type { Repository, RepositoryId } from "../../types/forest";
 import type { WorktreeIndex } from "../../hooks/useWorktreeIndex";
@@ -19,6 +24,7 @@ interface L2RepositoryPanelProps {
   onToggleCollapsed: () => void;
   index: WorktreeIndex;
   onAddRepository: () => void;
+  onLocate?: (id: RepositoryId) => void;
 }
 
 export function L2RepositoryPanel({
@@ -29,6 +35,7 @@ export function L2RepositoryPanel({
   onToggleCollapsed,
   index,
   onAddRepository,
+  onLocate,
 }: L2RepositoryPanelProps) {
   const [query, setQuery] = useState("");
 
@@ -107,7 +114,7 @@ export function L2RepositoryPanel({
               const selected = repository.id === selectedId;
 
               return (
-                <li key={repository.id}>
+                <li key={repository.id} className="flex flex-col">
                   <button
                     type="button"
                     onClick={() => onSelect(repository.id)}
@@ -132,11 +139,19 @@ export function L2RepositoryPanel({
                       >
                         {repository.mode}
                       </span>
-                      {entry.status === "ready" ? (
-                        <span className="ml-auto font-mono text-micro text-l2-muted">
-                          {entry.worktrees.length}
+                      {repository.health === "available" ? (
+                        entry.status === "ready" ? (
+                          <span className="ml-auto font-mono text-micro text-l2-muted">
+                            {entry.worktrees.length}
+                          </span>
+                        ) : null
+                      ) : (
+                        <span
+                          className={`${repositoryHealthBadgeClass(repository.health)} ml-auto`}
+                        >
+                          {repositoryHealthText(repository)}
                         </span>
-                      ) : null}
+                      )}
                     </span>
                     <span
                       className="truncate font-mono text-mono-code text-l2-muted"
@@ -145,6 +160,15 @@ export function L2RepositoryPanel({
                       {repository.path}
                     </span>
                   </button>
+                  {canLocateRepository(repository) && onLocate ? (
+                    <button
+                      type="button"
+                      className="mx-2 mb-1 self-start font-mono text-micro text-brand underline"
+                      onClick={() => onLocate(repository.id)}
+                    >
+                      Locate repository…
+                    </button>
+                  ) : null}
                 </li>
               );
             })}

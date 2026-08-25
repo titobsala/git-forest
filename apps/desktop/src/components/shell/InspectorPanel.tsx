@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { errorMessage } from "../../lib/errors";
+import { toCommandError } from "../../lib/errors";
 import { getWorktreeRemovalPreview, removeWorktree } from "../../lib/worktrees";
 import type {
   ForestConfiguration,
@@ -69,6 +69,8 @@ export function InspectorPanel({
   const [preview, setPreview] = useState<WorktreeRemovalPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const restoreFocus = useRef(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   /**
    * The worktree every in-flight request was issued for.
@@ -85,7 +87,27 @@ export function InspectorPanel({
     setPreview(null);
     setError(null);
     setBusy(false);
+    restoreFocus.current = false;
   }, [worktree?.id]);
+
+  useEffect(() => {
+    if (preview) {
+      function onKey(event: KeyboardEvent) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          restoreFocus.current = true;
+          setPreview(null);
+        }
+      }
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+    if (restoreFocus.current) {
+      restoreFocus.current = false;
+      triggerRef.current?.focus();
+    }
+    return undefined;
+  }, [preview]);
 
   if (collapsed) {
     return (
@@ -128,7 +150,7 @@ export function InspectorPanel({
       if (requestedFor.current !== requested) {
         return;
       }
-      setError(errorMessage(caught));
+      setError(toCommandError(caught).message);
     } finally {
       if (requestedFor.current === requested) {
         setBusy(false);
@@ -164,7 +186,7 @@ export function InspectorPanel({
       if (requestedFor.current !== requested) {
         return;
       }
-      setError(errorMessage(caught));
+      setError(toCommandError(caught).message);
     } finally {
       if (requestedFor.current === requested) {
         setBusy(false);
@@ -242,6 +264,12 @@ export function InspectorPanel({
               label="Changes"
               value={`${worktree.trackedChanges} tracked · ${worktree.untrackedFiles} untracked`}
             />
+            {worktree.statusError ? (
+              <Field label="Status" value={worktree.statusError.message} />
+            ) : null}
+            {worktree.prunable && worktree.prunableReason ? (
+              <Field label="Prunable" value={worktree.prunableReason} />
+            ) : null}
             {worktree.locked ? (
               <Field
                 label="Lock reason"
@@ -257,10 +285,14 @@ export function InspectorPanel({
               terminalName={configuration.defaultTerminal}
               agentName={agentName}
               onOpenTerminal={
-                onOpenTerminal ? () => onOpenTerminal(worktree) : undefined
+                worktree.present && onOpenTerminal
+                  ? () => onOpenTerminal(worktree)
+                  : undefined
               }
               onLaunchAgent={
-                onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
+                worktree.present && onLaunchAgent
+                  ? () => onLaunchAgent(worktree)
+                  : undefined
               }
             />
           </div>
@@ -274,66 +306,72 @@ export function InspectorPanel({
             </p>
           ) : null}
 
-          <div className="space-y-1.5 border-t border-card-border pt-3">
-            <p className="gf-label">Danger zone</p>
-            {!preview ? (
-              <button
-                type="button"
-                className="gf-button gf-button-danger"
-                disabled={busy}
-                onClick={() => void handlePreviewRemove()}
-              >
-                Remove worktree
-              </button>
-            ) : (
-              <div
-                role="region"
-                aria-label="Remove worktree"
-                className="space-y-2 rounded-sm border border-badge-high-ink/40 p-2"
-              >
-                <p className="text-body text-ink">
-                  Remove {preview.worktree.name}?
-                </p>
-                <p className="text-body text-ink-muted">
-                  {preview.worktree.trackedChanges} modified,{" "}
-                  {preview.worktree.untrackedFiles} untracked.
-                  {preview.blockers.length > 0
-                    ? ` Blocked: ${preview.blockers.join(", ")}.`
-                    : " This worktree is clean."}{" "}
-                  The branch is kept.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    className="gf-button"
-                    onClick={() => setPreview(null)}
-                  >
-                    Cancel
-                  </button>
-                  {preview.allowed ? (
+          {worktree.gitKnown && !worktree.statusError ? (
+            <div className="space-y-1.5 border-t border-card-border pt-3">
+              <p className="gf-label">Danger zone</p>
+              {!preview ? (
+                <button
+                  ref={triggerRef}
+                  type="button"
+                  className="gf-button gf-button-danger"
+                  disabled={busy}
+                  onClick={() => void handlePreviewRemove()}
+                >
+                  Remove worktree
+                </button>
+              ) : (
+                <div
+                  role="region"
+                  aria-label="Remove worktree"
+                  className="space-y-2 rounded-sm border border-badge-high-ink/40 p-2"
+                >
+                  <p className="text-body text-ink">
+                    Remove {preview.worktree.name}?
+                  </p>
+                  <p className="text-body text-ink-muted">
+                    {preview.worktree.trackedChanges} modified,{" "}
+                    {preview.worktree.untrackedFiles} untracked.
+                    {preview.blockers.length > 0
+                      ? ` Blocked: ${preview.blockers.join(", ")}.`
+                      : " This worktree is clean."}{" "}
+                    The branch is kept.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      className="gf-button gf-button-danger"
-                      disabled={busy}
-                      onClick={() => void handleRemove(false)}
+                      className="gf-button"
+                      onClick={() => {
+                        restoreFocus.current = true;
+                        setPreview(null);
+                      }}
                     >
-                      Remove worktree
+                      Cancel
                     </button>
-                  ) : null}
-                  {preview.requiresForce ? (
-                    <button
-                      type="button"
-                      className="gf-button gf-button-danger"
-                      disabled={busy}
-                      onClick={() => void handleRemove(true)}
-                    >
-                      Force remove
-                    </button>
-                  ) : null}
+                    {preview.allowed ? (
+                      <button
+                        type="button"
+                        className="gf-button gf-button-danger"
+                        disabled={busy}
+                        onClick={() => void handleRemove(false)}
+                      >
+                        Remove worktree
+                      </button>
+                    ) : null}
+                    {preview.requiresForce ? (
+                      <button
+                        type="button"
+                        className="gf-button gf-button-force"
+                        disabled={busy}
+                        onClick={() => void handleRemove(true)}
+                      >
+                        Force remove
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
     </aside>

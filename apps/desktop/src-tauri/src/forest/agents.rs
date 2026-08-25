@@ -62,6 +62,7 @@ impl ForestService {
                 .terminals
                 .launch_command(&spec, configuration.launch_behavior),
         } {
+            log::warn!("agent launch failed for session {}", session.id.as_str());
             session.status = AgentSessionStatus::Failed;
             session.exited_at = Some(Utc::now());
             update_agent_session(self.db.connection(), &session)?;
@@ -75,6 +76,11 @@ impl ForestService {
             session.process_start_ticks = i64::try_from(identity.start_ticks).ok();
             session.last_seen_at = Some(Utc::now());
         }
+        log::info!(
+            "session {} {}",
+            session.id.as_str(),
+            session.status.as_str()
+        );
         update_agent_session(self.db.connection(), &session)?;
 
         Ok(AgentLaunchResult {

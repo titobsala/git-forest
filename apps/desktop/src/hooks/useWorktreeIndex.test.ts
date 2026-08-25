@@ -35,4 +35,35 @@ describe("useWorktreeIndex", () => {
       "2026-08-25T10:00:00Z",
     );
   });
+
+  it("does not load worktrees for repositories that are not available", async () => {
+    renderHook(() =>
+      useWorktreeIndex([
+        sampleRepository({ health: "missing" }),
+        sampleRepository({ id: "repo-2", health: "unknown" }),
+      ]),
+    );
+
+    await Promise.resolve();
+    expect(listWorktrees).not.toHaveBeenCalled();
+  });
+
+  it("refreshAll only refreshes available repositories", async () => {
+    vi.mocked(refreshWorktrees).mockResolvedValue([sampleWorktree()]);
+    const { result } = renderHook(() =>
+      useWorktreeIndex([
+        sampleRepository(),
+        sampleRepository({ id: "repo-2", health: "missing" }),
+      ]),
+    );
+
+    act(() => {
+      result.current.refreshAll(["repo-1", "repo-2"]);
+    });
+
+    await waitFor(() => {
+      expect(refreshWorktrees).toHaveBeenCalledWith("repo-1");
+    });
+    expect(refreshWorktrees).not.toHaveBeenCalledWith("repo-2");
+  });
 });

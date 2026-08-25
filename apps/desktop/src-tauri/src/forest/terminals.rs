@@ -11,9 +11,18 @@ impl ForestService {
         let path = self.require_worktree_launch_path(&worktree_id)?;
         let configuration = self.configuration()?;
         let mut result = match configuration.default_terminal {
-            TerminalProviderId::Warp => self
-                .terminals
-                .open_directory(&path, configuration.launch_behavior)?,
+            TerminalProviderId::Warp => {
+                match self
+                    .terminals
+                    .open_directory(&path, configuration.launch_behavior)
+                {
+                    Ok(result) => result,
+                    Err(error) => {
+                        log::warn!("terminal launch failed");
+                        return Err(error);
+                    }
+                }
+            }
         };
         result.last_used_at = Some(self.touch_worktree_used(&worktree_id)?);
         Ok(result)

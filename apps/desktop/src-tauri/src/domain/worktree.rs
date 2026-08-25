@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::error::CommandError;
 use super::ids::{RepositoryId, WorktreeId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,6 +16,7 @@ pub enum RemovalBlocker {
     Dirty,
     Untracked,
     ActiveSession,
+    StatusUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +32,7 @@ pub struct Worktree {
     pub locked: bool,
     pub lock_reason: Option<String>,
     pub prunable: bool,
+    pub prunable_reason: Option<String>,
     pub present: bool,
     pub git_known: bool,
     pub is_primary: bool,
@@ -40,6 +43,7 @@ pub struct Worktree {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
+    pub status_error: Option<CommandError>,
 }
 
 impl Worktree {
@@ -93,6 +97,7 @@ pub struct RemoveWorktreeResult {
 #[cfg(test)]
 mod tests {
     use super::{RemovalBlocker, RepositoryId, Worktree, WorktreeId};
+    use crate::domain::CommandError;
     use chrono::{TimeZone, Utc};
     use std::path::PathBuf;
 
@@ -109,6 +114,7 @@ mod tests {
             locked: false,
             lock_reason: None,
             prunable: false,
+            prunable_reason: None,
             present: true,
             git_known: true,
             is_primary: false,
@@ -119,6 +125,10 @@ mod tests {
             created_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap(),
             last_used_at: None,
+            status_error: Some(CommandError {
+                code: "git_command_failed".into(),
+                message: "index unreadable".into(),
+            }),
         };
 
         let json = serde_json::to_value(&worktree).expect("serialize");
@@ -129,10 +139,16 @@ mod tests {
         assert_eq!(json["trackedChanges"], 1);
         assert_eq!(json["untrackedFiles"], 2);
         assert_eq!(json["isPrimary"], false);
+        assert_eq!(json["prunableReason"], serde_json::Value::Null);
+        assert_eq!(json["statusError"]["code"], "git_command_failed");
         assert_eq!(json["lastUsedAt"], serde_json::Value::Null);
         assert_eq!(
             serde_json::to_value(RemovalBlocker::Dirty).unwrap(),
             "dirty"
+        );
+        assert_eq!(
+            serde_json::to_value(RemovalBlocker::StatusUnavailable).unwrap(),
+            "status_unavailable"
         );
     }
 }

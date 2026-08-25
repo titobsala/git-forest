@@ -3,7 +3,9 @@ import {
   importRepositories,
   importRepository,
   listRepositories,
+  reconcileRepositories,
   refreshRepository,
+  relocateRepository,
   removeRepository,
 } from "./repositories";
 import { invokeCommand } from "./tauri";
@@ -51,6 +53,15 @@ describe("repository commands", () => {
     await removeRepository("repo-1");
     expect(invokeCommand).toHaveBeenCalledWith("remove_repository", {
       id: "repo-1",
+    });
+
+    await reconcileRepositories();
+    expect(invokeCommand).toHaveBeenCalledWith("reconcile_repositories");
+
+    await relocateRepository("repo-1", "/tmp/moved");
+    expect(invokeCommand).toHaveBeenCalledWith("relocate_repository", {
+      id: "repo-1",
+      path: "/tmp/moved",
     });
   });
 });
