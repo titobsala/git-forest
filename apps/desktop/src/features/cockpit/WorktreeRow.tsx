@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import type { Worktree } from "../../types/forest";
+import type { AgentSession, Worktree } from "../../types/forest";
 import { AgentBadge } from "../../components/deferred/AgentBadge";
 import { StashPill } from "../../components/deferred/StashPill";
 import { TerminalActions } from "../../components/deferred/TerminalActions";
@@ -30,6 +30,8 @@ interface WorktreeRowProps {
   agentName: string;
   onOpenTerminal?: () => void;
   onLaunchAgent?: () => void;
+  session?: AgentSession | null;
+  sessionAgentName?: string;
 }
 
 export function WorktreeRow({
@@ -43,6 +45,8 @@ export function WorktreeRow({
   agentName,
   onOpenTerminal,
   onLaunchAgent,
+  session = null,
+  sessionAgentName,
 }: WorktreeRowProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -106,7 +110,7 @@ export function WorktreeRow({
       ))}
 
       <StashPill count={null} />
-      <AgentBadge session={null} />
+      <AgentBadge session={session} agentName={sessionAgentName} />
 
       <span className="ml-auto flex shrink-0 items-center gap-2">
         {drift ? (

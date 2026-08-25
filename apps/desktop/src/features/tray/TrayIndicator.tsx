@@ -65,8 +65,7 @@ export function TrayIndicator({
       >
         <TrayIcon />
         <span className="font-mono text-micro">
-          {counts.worktrees} wt · {counts.agents === null ? "—" : counts.agents}{" "}
-          proc
+          {counts.worktrees} wt · {counts.agents} proc
         </span>
       </button>
 

@@ -76,4 +76,151 @@ describe("buildResults", () => {
   it("returns nothing when there is no match", () => {
     expect(buildResults([repository], worktrees, "zzzz")).toEqual([]);
   });
+
+  it("orders empty-query worktrees by recency then title", () => {
+    const recent = [
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-old",
+          name: "alpha",
+          branch: "alpha",
+          lastUsedAt: "2026-08-20T09:00:00Z",
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-new",
+          name: "zeta",
+          branch: "zeta",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-never",
+          name: "beta",
+          branch: "beta",
+          lastUsedAt: null,
+        }),
+      },
+    ];
+
+    const results = buildResults([repository], recent, "");
+
+    expect(
+      results
+        .filter((result) => result.kind === "worktree")
+        .map((result) => result.worktree?.id),
+    ).toEqual(["wt-new", "wt-old", "wt-never"]);
+  });
+
+  it("breaks equal search scores with recency", () => {
+    const tied = [
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-older",
+          name: "feat-risk",
+          branch: "feat/risk-a",
+          path: "/tmp/a",
+          lastUsedAt: "2026-08-20T09:00:00Z",
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-newer",
+          name: "feat-risk",
+          branch: "feat/risk-b",
+          path: "/tmp/b",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+    ];
+
+    const results = buildResults([repository], tied, "feat/risk");
+
+    expect(results.map((result) => result.worktree?.id)).toEqual([
+      "wt-newer",
+      "wt-older",
+    ]);
+  });
+
+  it("sorts never-used worktrees after used ones at equal rank", () => {
+    const mixed = [
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-unused",
+          name: "feat-risk",
+          branch: "feat/risk-x",
+          path: "/tmp/x",
+          lastUsedAt: null,
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-used",
+          name: "feat-risk",
+          branch: "feat/risk-y",
+          path: "/tmp/y",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+    ];
+
+    const results = buildResults([repository], mixed, "feat/risk");
+
+    expect(results.map((result) => result.worktree?.id)).toEqual([
+      "wt-used",
+      "wt-unused",
+    ]);
+  });
+
+  it("breaks equal recency with title then path", () => {
+    const tied = [
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-z",
+          name: "zeta",
+          branch: "zeta",
+          path: "/tmp/z",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-a-late",
+          name: "alpha",
+          branch: "alpha",
+          path: "/tmp/a-late",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+      {
+        repository,
+        worktree: sampleWorktree({
+          id: "wt-a-early",
+          name: "alpha",
+          branch: "alpha",
+          path: "/tmp/a-early",
+          lastUsedAt: "2026-08-25T10:00:00Z",
+        }),
+      },
+    ];
+
+    const results = buildResults([repository], tied, "");
+
+    expect(
+      results
+        .filter((result) => result.kind === "worktree")
+        .map((result) => result.worktree?.id),
+    ).toEqual(["wt-a-early", "wt-a-late", "wt-z"]);
+  });
 });

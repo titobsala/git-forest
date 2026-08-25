@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
 import { openWorktreeInTerminal } from "../lib/terminals";
-import { detectAgents, launchAgent } from "../lib/agents";
+import { detectAgents, launchAgent, listAgentSessions } from "../lib/agents";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import {
   FALLBACK_FOREST_STATE,
   sampleRepository,
   sampleWorktree,
+  sampleAgentSession,
 } from "../types/forest";
 
 const nativeState = {
@@ -18,7 +19,7 @@ const nativeState = {
   schemaVersion: 2,
   appInfo: {
     name: "Git Forest",
-    version: "0.0.6",
+    version: "0.0.8",
     tagline: "Worktrees in reach.",
   },
   repositories: [sampleRepository()],
@@ -60,6 +61,7 @@ vi.mock("../lib/terminals", () => ({
 vi.mock("../lib/agents", () => ({
   detectAgents: vi.fn(),
   launchAgent: vi.fn(),
+  listAgentSessions: vi.fn(),
 }));
 
 // `restoreMocks: true` resets implementations between tests, so every mock the
@@ -70,13 +72,19 @@ beforeEach(async () => {
   vi.mocked(scan.listenToScanComplete).mockResolvedValue(() => undefined);
   vi.mocked(listWorktrees).mockResolvedValue([]);
   vi.mocked(refreshWorktrees).mockResolvedValue([]);
-  vi.mocked(openWorktreeInTerminal).mockResolvedValue({ provider: "warp" });
+  vi.mocked(openWorktreeInTerminal).mockResolvedValue({
+    provider: "warp",
+    lastUsedAt: "2026-08-25T10:00:00Z",
+  });
   vi.mocked(launchAgent).mockResolvedValue({
     provider: "warp",
     agentId: "codex",
     command: "codex",
+    lastUsedAt: "2026-08-25T10:00:00Z",
+    sessionId: "session-1",
   });
   vi.mocked(detectAgents).mockResolvedValue([]);
+  vi.mocked(listAgentSessions).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -115,7 +123,7 @@ describe("App", () => {
 
     // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
-    expect(screen.queryByText("v0.0.6")).not.toBeInTheDocument();
+    expect(screen.queryByText("v0.0.8")).not.toBeInTheDocument();
   });
 
   it("groups worktrees under their repository with telemetry badges", async () => {
@@ -397,6 +405,30 @@ describe("App", () => {
     expect(openWorktreeInTerminal).toHaveBeenCalledWith("wt-1");
   });
 
+  it("opens a worktree in Warp from Quick Launch Enter", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Quick Launch" });
+    await user.keyboard("risk-483");
+    await user.keyboard("{Enter}");
+
+    expect(openWorktreeInTerminal).toHaveBeenCalledWith("wt-1");
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Quick Launch" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("shows a typed terminal error instead of failing silently", async () => {
     const user = userEvent.setup();
     vi.mocked(getForestState).mockResolvedValue(nativeState);
@@ -493,5 +525,127 @@ describe("App", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Codex is not available",
     );
+  });
+
+  it("shows a live agent badge and tray count from session data", async () => {
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(listAgentSessions).mockResolvedValue([sampleAgentSession()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("PID 4242").length).toBeGreaterThan(0);
+    expect(screen.getByTitle("Forest status")).toHaveTextContent("1 proc");
+  });
+
+  it("keeps only worktrees with active sessions under the Agents filter", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([
+      sampleWorktree({ id: "wt-1", branch: "feat/risk-483" }),
+      sampleWorktree({
+        id: "wt-2",
+        name: "fix-report-export",
+        branch: "fix/report-export",
+      }),
+    ]);
+    vi.mocked(listAgentSessions).mockResolvedValue([
+      sampleAgentSession({ worktreeId: "wt-1" }),
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+    expect(screen.getByText("fix/report-export")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Agents" }));
+
+    expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    expect(screen.queryByText("fix/report-export")).not.toBeInTheDocument();
+  });
+
+  it("refreshes sessions after launching an agent", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(listAgentSessions)
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([sampleAgentSession()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("PID 4242")).not.toBeInTheDocument();
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Launch Codex" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("PID 4242").length).toBeGreaterThan(0);
+    });
+    expect(launchAgent).toHaveBeenCalledWith("wt-1");
+  });
+
+  it("clears the primary badge when a running session exits", async () => {
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(listAgentSessions).mockResolvedValue([sampleAgentSession()]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("PID 4242").length).toBeGreaterThan(0);
+    });
+
+    vi.mocked(listAgentSessions).mockResolvedValue([
+      sampleAgentSession({
+        status: "exited",
+        pid: null,
+        exitedAt: "2026-08-25T11:00:00Z",
+      }),
+    ]);
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("PID 4242")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTitle("Forest status")).toHaveTextContent("0 proc");
+  });
+
+  it("lists sessions on the agent monitor", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(listAgentSessions).mockResolvedValue([
+      sampleAgentSession(),
+      sampleAgentSession({
+        id: "session-2",
+        status: "unknown",
+        pid: null,
+      }),
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Agent monitor" }));
+
+    expect(await screen.findByText("running")).toBeInTheDocument();
+    expect(screen.getByText("unknown")).toBeInTheDocument();
+    expect(screen.getByText("PID 4242")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("EXOG App / feat/risk-483").length,
+    ).toBeGreaterThan(0);
   });
 });

@@ -1,23 +1,30 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::agents::{ExecutableLocator, PathLocator};
 use crate::domain::{
     AppInfo, ForestConfiguration, ForestError, ForestState, LaunchBehavior, Repository,
-    TerminalProviderId, ThemePreference, WorktreeNamingStrategy,
+    TerminalProviderId, ThemePreference, WorktreeId, WorktreeNamingStrategy,
 };
 use crate::git::GitRunner;
 use crate::persistence::{
     agent_exists, list_agent_definitions, list_repositories, load_configuration,
-    save_configuration, seed_builtin_agents, Database,
+    save_configuration, seed_builtin_agents, touch_worktree_used as persist_touch_worktree_used,
+    Database,
 };
 use crate::platform::PlatformPaths;
+use crate::processes::{default_process_inspector, ProcessInspector};
 use crate::terminals::WarpProvider;
 
 mod agents;
 mod naming;
 mod repositories;
+mod sessions;
 mod terminals;
 mod worktrees;
+
+const DEFAULT_PID_POLL_ATTEMPTS: u32 = 5;
+const DEFAULT_PID_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub struct ForestService {
     db: Database,
@@ -25,6 +32,9 @@ pub struct ForestService {
     git: GitRunner,
     terminals: WarpProvider,
     executables: Box<dyn ExecutableLocator>,
+    processes: Box<dyn ProcessInspector>,
+    pid_poll_attempts: u32,
+    pid_poll_interval: Duration,
 }
 
 impl ForestService {
@@ -39,6 +49,26 @@ impl ForestService {
         terminals: WarpProvider,
         executables: Box<dyn ExecutableLocator>,
     ) -> Result<Self, ForestError> {
+        Self::initialize_with_processes(
+            db,
+            platform,
+            terminals,
+            executables,
+            default_process_inspector(),
+            DEFAULT_PID_POLL_ATTEMPTS,
+            DEFAULT_PID_POLL_INTERVAL,
+        )
+    }
+
+    pub(crate) fn initialize_with_processes(
+        db: Database,
+        platform: PlatformPaths,
+        terminals: WarpProvider,
+        executables: Box<dyn ExecutableLocator>,
+        processes: Box<dyn ProcessInspector>,
+        pid_poll_attempts: u32,
+        pid_poll_interval: Duration,
+    ) -> Result<Self, ForestError> {
         db.migrate()?;
         let service = Self {
             db,
@@ -46,11 +76,15 @@ impl ForestService {
             git: GitRunner::new(),
             terminals,
             executables,
+            processes,
+            pid_poll_attempts,
+            pid_poll_interval,
         };
         service.ensure_default_configuration()?;
         seed_builtin_agents(service.db.connection())?;
         let configuration = service.configuration()?;
         PlatformPaths::ensure_forest_layout(&configuration.forest_root)?;
+        service.reconcile_agent_sessions()?;
         Ok(service)
     }
 
@@ -127,6 +161,15 @@ impl ForestService {
             theme: ThemePreference::System,
         })
     }
+
+    fn touch_worktree_used(
+        &self,
+        id: &WorktreeId,
+    ) -> Result<chrono::DateTime<chrono::Utc>, ForestError> {
+        let at = chrono::Utc::now();
+        persist_touch_worktree_used(self.db.connection(), id, at)?;
+        Ok(at)
+    }
 }
 
 #[cfg(test)]
@@ -189,9 +232,31 @@ pub(crate) mod tests {
         terminals: crate::terminals::WarpProvider,
         executables: Box<dyn crate::agents::ExecutableLocator>,
     ) -> ForestService {
+        open_service_with_processes(
+            env,
+            terminals,
+            executables,
+            Box::new(crate::processes::fake::FakeProcessInspector::new()),
+        )
+    }
+
+    pub(crate) fn open_service_with_processes(
+        env: &TempEnv,
+        terminals: crate::terminals::WarpProvider,
+        executables: Box<dyn crate::agents::ExecutableLocator>,
+        processes: Box<dyn crate::processes::ProcessInspector>,
+    ) -> ForestService {
         let db = Database::open(&env.db_path()).expect("open db");
-        ForestService::initialize_with(db, env.platform(), terminals, executables)
-            .expect("initialize")
+        ForestService::initialize_with_processes(
+            db,
+            env.platform(),
+            terminals,
+            executables,
+            processes,
+            2,
+            std::time::Duration::ZERO,
+        )
+        .expect("initialize")
     }
 
     #[test]
@@ -395,7 +460,7 @@ pub(crate) mod tests {
 
         let reopened = open_service(&env);
         let state = reopened.state().expect("reopen");
-        assert_eq!(state.schema_version, 2);
+        assert_eq!(state.schema_version, 4);
         assert_eq!(state.repositories.len(), 1);
         assert_eq!(state.repositories[0].name, "Keep Me");
         assert_eq!(state.configuration.default_agent_id.as_str(), "codex");

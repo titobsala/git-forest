@@ -12,6 +12,7 @@ import { getWorktreeRemovalPreview, removeWorktree } from "../../lib/worktrees";
 import type {
   ForestConfiguration,
   AgentDefinition,
+  AgentSession,
   Repository,
   Worktree,
   WorktreeId,
@@ -38,6 +39,7 @@ interface InspectorPanelProps {
   onRemoved: () => void;
   onOpenTerminal?: (worktree: Worktree) => void;
   onLaunchAgent?: (worktree: Worktree) => void;
+  session?: AgentSession | null;
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -62,6 +64,7 @@ export function InspectorPanel({
   onRemoved,
   onOpenTerminal,
   onLaunchAgent,
+  session = null,
 }: InspectorPanelProps) {
   const [preview, setPreview] = useState<WorktreeRemovalPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +218,16 @@ export function InspectorPanel({
               <span className="gf-badge gf-badge-neutral">primary</span>
             ) : null}
             <StashPill count={null} />
-            <AgentBadge session={null} />
+            <AgentBadge
+              session={session}
+              agentName={
+                session
+                  ? (agentDefinitions.find(
+                      (agent) => agent.id === session.agentDefinitionId,
+                    )?.name ?? session.agentDefinitionId)
+                  : undefined
+              }
+            />
           </div>
 
           <dl className="space-y-2">
@@ -251,11 +263,6 @@ export function InspectorPanel({
                 onLaunchAgent ? () => onLaunchAgent(worktree) : undefined
               }
             />
-            {onLaunchAgent ? null : (
-              <p className="text-micro text-ink-muted">
-                Session tracking lands in release 0.0.8.
-              </p>
-            )}
           </div>
 
           {error ? (

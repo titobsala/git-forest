@@ -1,7 +1,7 @@
 {
   "name": "git-forest",
   "private": true,
-  "version": "0.0.6",
+  "version": "0.0.8",
   "workspaces": [
     "apps/*"
   ],

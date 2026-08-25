@@ -190,15 +190,15 @@ Before anything is typed, the palette shows the first seven runnable commands �
 
 ## 7. Implementation Status
 
-The desktop UI implements this specification as of release 0.0.6. Deviations, all deliberate:
+The desktop UI implements this specification as of release 0.0.8. Deviations, all deliberate:
 
 **Keyboard map (section 5).** `Tab` / `Shift + Tab` toggle the side panels **only while focus is inside the cockpit worktree list**, which is a composite widget with a roving tabindex where `↑` / `↓` already move the selection. Everywhere else — toolbar, forms, inspector, launcher — `Tab` keeps its native focus behaviour. Overriding it globally would have made the app unnavigable by keyboard, contradicting AGENTS.md section 43.
 
-`Super + W` is an OS-global shortcut requiring the Tauri global-shortcut plugin and window show/hide (release 0.0.7). The Quick Launch overlay opens on `Cmd/Ctrl + K` and from the L1 rail until then.
+`Super + W` is registered as an OS-global shortcut in Rust. `Cmd/Ctrl + K` still toggles the overlay while Forest is focused and does not hide the window. If `Super + W` is already taken by the desktop environment, Forest logs a warning and remains usable via `Cmd/Ctrl + K`.
 
-`Enter` opens the selected worktree in Warp. `⌥A` launches the configured default agent in that worktree.
+`Enter` on a selected worktree (cockpit or Quick Launch) opens Warp. `Enter` on a repository result reveals that repository in the cockpit. `⌥A` launches the configured default agent in that worktree.
 
-**Telemetry with no data source.** Agent session pills, the stash pill and the tray process count are built to this specification and render inert — empty, or disabled with an explanatory tooltip — rather than showing placeholder values. Each is listed in ROADMAP.md under "Deferred UI wiring" against the release that will feed it. Stash counts are not on the roadmap at all: `Worktree` has no `stashCount` field. Terminal and agent row actions are live as of 0.0.5 and 0.0.6.
+**Telemetry with no data source.** The stash pill is built to this specification and remains inert — empty, with an explanatory tooltip — rather than showing a placeholder count. It is listed in ROADMAP.md under "Deferred UI wiring". `Worktree` has no `stashCount` field. Terminal actions, agent launch, and agent-session badges/filter/monitor/tray counts are live as of 0.0.5–0.0.8. `WorkspaceSession` (generic terminal/editor activity) is not tracked.
 
 **Theme.** The specification's palette is light-only. A neutral dark theme was added on top of it in release 0.0.4 and is documented in section 8; the light tokens are unchanged.
 

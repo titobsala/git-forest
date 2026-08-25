@@ -11,6 +11,8 @@ import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { isInteractiveTarget, resolveShortcut } from "../../lib/keymap";
 import type {
   AgentDefinition,
+  AgentDefinitionId,
+  AgentSession,
   ForestConfiguration,
   Repository,
   RepositoryId,
@@ -35,6 +37,8 @@ interface CockpitViewProps {
   onNewWorktree: () => void;
   onOpenTerminal?: (worktree: Worktree) => void;
   onLaunchAgent?: (worktree: Worktree) => void;
+  hasActiveSession?: (worktree: Worktree) => boolean;
+  primarySession?: (worktreeId: WorktreeId) => AgentSession | null;
 }
 
 export function CockpitView({
@@ -50,6 +54,8 @@ export function CockpitView({
   onNewWorktree,
   onOpenTerminal,
   onLaunchAgent,
+  hasActiveSession,
+  primarySession,
 }: CockpitViewProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CockpitFilter>("all");
@@ -68,11 +74,11 @@ export function CockpitView({
           worktrees: entry.worktrees.filter(
             (worktree) =>
               worktreeMatches(worktree, query) &&
-              matchesFilter(worktree, filter),
+              matchesFilter(worktree, filter, hasActiveSession),
           ),
         };
       }),
-    [repositories, index, query, filter],
+    [repositories, index, query, filter, hasActiveSession],
   );
 
   /** Visible rows in document order, for ↑/↓ traversal across groups. */
@@ -187,6 +193,12 @@ export function CockpitView({
     agentDefinitions.find((agent) => agent.id === configuration.defaultAgentId)
       ?.name ?? configuration.defaultAgentId;
 
+  function agentNameFor(agentId: AgentDefinitionId): string {
+    return (
+      agentDefinitions.find((agent) => agent.id === agentId)?.name ?? agentId
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <CockpitToolbar
@@ -236,6 +248,8 @@ export function CockpitView({
               agentName={agentName}
               onOpenTerminal={onOpenTerminal}
               onLaunchAgent={onLaunchAgent}
+              sessionFor={primarySession}
+              agentNameFor={agentNameFor}
             />
           ))}
         </div>

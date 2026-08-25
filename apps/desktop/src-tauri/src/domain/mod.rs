@@ -8,14 +8,17 @@ pub mod scan;
 pub mod terminal;
 pub mod worktree;
 
-pub use agent::{AgentAvailability, AgentDefinition, AgentLaunchResult, AgentLaunchSpec};
+pub use agent::{
+    AgentAvailability, AgentDefinition, AgentLaunchResult, AgentLaunchSpec, AgentSession,
+    AgentSessionStatus,
+};
 pub use app_info::AppInfo;
 pub use error::{CommandError, ForestError};
 pub use forest::{
     ForestConfiguration, ForestPaths, ForestState, LaunchBehavior, TerminalProviderId,
     ThemePreference, WorktreeNamingStrategy,
 };
-pub use ids::{AgentDefinitionId, RepositoryId, WorktreeId};
+pub use ids::{AgentDefinitionId, AgentSessionId, RepositoryId, WorktreeId};
 pub use repository::{Repository, RepositoryMode};
 pub use scan::{
     ImportFailure, ImportRepositoriesResult, ImportSkip, ScanCandidate, ScanCompletedPayload,

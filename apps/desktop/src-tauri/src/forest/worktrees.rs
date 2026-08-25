@@ -96,6 +96,7 @@ impl ForestService {
         &self,
         worktree_id: WorktreeId,
     ) -> Result<WorktreeRemovalPreview, ForestError> {
+        self.reconcile_agent_sessions()?;
         let worktree = self.require_worktree_summary(&worktree_id)?;
         self.preview_from_worktree(&worktree)
     }
@@ -105,6 +106,7 @@ impl ForestService {
         worktree_id: WorktreeId,
         force: bool,
     ) -> Result<RemoveWorktreeResult, ForestError> {
+        self.reconcile_agent_sessions()?;
         let worktree = self.require_worktree_summary(&worktree_id)?;
         let preview = self.preview_from_worktree(&worktree)?;
         let repository = self.require_repository(&worktree.repository_id)?;
@@ -295,6 +297,7 @@ impl ForestService {
                     branch: git_worktree.branch.clone(),
                     created_at: now,
                     updated_at: now,
+                    last_used_at: None,
                 },
             };
             upsert_worktree(self.db.connection(), &record)?;
@@ -362,6 +365,7 @@ fn summarize(
         behind: None,
         created_at: record.created_at,
         updated_at: record.updated_at,
+        last_used_at: record.last_used_at,
     };
 
     if present {
@@ -399,6 +403,7 @@ fn missing_summary(record: WorktreeRecord) -> Worktree {
         behind: None,
         created_at: record.created_at,
         updated_at: record.updated_at,
+        last_used_at: record.last_used_at,
     }
 }
 
@@ -588,6 +593,7 @@ mod tests {
                 branch: Some("feat/ghost".into()),
                 created_at: now,
                 updated_at: now,
+                last_used_at: None,
             },
         )
         .expect("insert ghost");
@@ -627,6 +633,64 @@ mod tests {
             .expect("preview");
         assert!(preview.blockers.contains(&RemovalBlocker::ActiveSession));
         assert!(preview.requires_force);
+    }
+
+    #[test]
+    fn exited_session_does_not_block_removal() {
+        let env = TempEnv::new();
+        let inspector = crate::processes::fake::FakeProcessInspector::new();
+        let launcher = crate::terminals::launcher::FakeDesktopLauncher::with_binaries(&[
+            "warp-terminal",
+            "codex",
+        ])
+        .and_scheme("warp");
+        let terminals = crate::terminals::WarpProvider::new(
+            Box::new(launcher),
+            std::time::Duration::from_secs(30),
+            env.root.join("tab_configs"),
+        );
+        let service = super::super::tests::open_service_with_processes(
+            &env,
+            terminals,
+            Box::new(
+                crate::terminals::launcher::FakeDesktopLauncher::with_binaries(&[
+                    "warp-terminal",
+                    "codex",
+                ]),
+            ),
+            Box::new(inspector),
+        );
+        let repo_path = env.root.join("linked");
+        init_repository_at(&repo_path);
+        run_git(&repo_path, &["commit", "--allow-empty", "-m", "initial"]);
+        let repository = service
+            .import_repository(Some("Demo App".into()), repo_path)
+            .expect("import")
+            .repositories
+            .into_iter()
+            .next()
+            .unwrap();
+        let created = service
+            .create_worktree(CreateWorktreeInput {
+                repository_id: repository.id,
+                base_ref: "main".into(),
+                branch: "feat/exited-session".into(),
+                name: None,
+            })
+            .expect("create");
+        service
+            .db_connection_for_test()
+            .execute(
+                "INSERT INTO agent_sessions (id, worktree_id, agent_definition_id, status, pid, process_start_ticks)
+                 VALUES ('session-gone', ?1, 'codex', 'running', 4242, 99)",
+                [created.worktree.id.as_str()],
+            )
+            .expect("session");
+
+        let preview = service
+            .worktree_removal_preview(created.worktree.id.clone())
+            .expect("preview");
+        assert!(!preview.blockers.contains(&RemovalBlocker::ActiveSession));
     }
     #[test]
     fn repository_identity_separates_same_named_worktree_namespaces() {

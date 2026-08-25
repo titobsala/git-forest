@@ -14,9 +14,8 @@
  * listbox rather than nested groups, so `aria-activedescendant` keeps working
  * and ArrowUp/ArrowDown cross a boundary without the user noticing one exists.
  *
- * NOTE: `Super + W` is an OS-global shortcut needing the Tauri global-shortcut
- * plugin plus window show/hide, which arrives with release 0.0.7. Until then
- * the overlay opens on Cmd/Ctrl+K and from the L1 rail.
+ * NOTE: `Super + W` is registered natively. `Cmd/Ctrl + K` remains the
+ * in-app toggle and does not hide the window.
  */
 
 import {
@@ -64,7 +63,10 @@ interface QuickLaunchProps {
   commands: Command[];
   actionContext: ActionContext;
   onOpenRepository: (repository: Repository) => void;
-  onOpenWorktree: (worktree: Worktree, repository: Repository) => void;
+  onOpenWorktreeInTerminal: (
+    worktree: Worktree,
+    repository: Repository,
+  ) => void;
 }
 
 export function QuickLaunch({
@@ -75,7 +77,7 @@ export function QuickLaunch({
   commands,
   actionContext,
   onOpenRepository,
-  onOpenWorktree,
+  onOpenWorktreeInTerminal,
 }: QuickLaunchProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -129,7 +131,7 @@ export function QuickLaunch({
         result,
         run: () => {
           if (result.worktree) {
-            onOpenWorktree(result.worktree, result.repository);
+            onOpenWorktreeInTerminal(result.worktree, result.repository);
           } else {
             onOpenRepository(result.repository);
           }
@@ -150,7 +152,7 @@ export function QuickLaunch({
     repositories,
     worktrees,
     onOpenRepository,
-    onOpenWorktree,
+    onOpenWorktreeInTerminal,
   ]);
 
   const rows = useMemo(

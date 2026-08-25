@@ -32,6 +32,6 @@ The UI invokes `detect_agents` and `launch_agent`. Custom-agent editing and `age
 ## Consequences
 
 - Codex, Claude Code, and OpenCode can be launched from a worktree through Warp. Cursor CLI may show Installed/Missing but is not a required launch target.
-- Forest does not record PIDs or reconcile processes after launch; those surfaces stay empty until Release 0.0.8.
+- Forest records agent sessions and reconciles them against Linux `/proc` as of Release 0.0.8. See [0006. Linux agent process reconciliation](0006-linux-agent-process-reconciliation.md).
 - Adding another terminal provider means implementing `launch_command` for that provider without changing agent detection.
 - The encoder is the only place Forest builds a command string, and tests assert that worktree paths never appear in it.

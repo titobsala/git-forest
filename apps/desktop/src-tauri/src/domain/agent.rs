@@ -28,6 +28,8 @@ pub struct AgentLaunchResult {
     pub provider: crate::domain::TerminalProviderId,
     pub agent_id: AgentDefinitionId,
     pub command: String,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub session_id: AgentSessionId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +44,6 @@ pub struct AgentDefinition {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[allow(dead_code)]
 pub enum AgentSessionStatus {
     Starting,
     Running,
@@ -51,15 +52,44 @@ pub enum AgentSessionStatus {
     Failed,
 }
 
+impl AgentSessionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::Exited => "exited",
+            Self::Unknown => "unknown",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, crate::domain::ForestError> {
+        match value {
+            "starting" => Ok(Self::Starting),
+            "running" => Ok(Self::Running),
+            "exited" => Ok(Self::Exited),
+            "unknown" => Ok(Self::Unknown),
+            "failed" => Ok(Self::Failed),
+            other => Err(crate::domain::ForestError::Serialization(format!(
+                "unknown agent session status: {other}"
+            ))),
+        }
+    }
+
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::Starting | Self::Running)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub struct AgentSession {
     pub id: AgentSessionId,
     pub worktree_id: WorktreeId,
     pub agent_definition_id: AgentDefinitionId,
     pub status: AgentSessionStatus,
     pub pid: Option<i64>,
+    pub process_start_ticks: Option<i64>,
     pub launched_at: Option<DateTime<Utc>>,
     pub last_seen_at: Option<DateTime<Utc>>,
     pub exited_at: Option<DateTime<Utc>>,
@@ -96,6 +126,7 @@ mod tests {
             agent_definition_id: AgentDefinitionId::from_string("codex"),
             status: AgentSessionStatus::Unknown,
             pid: None,
+            process_start_ticks: None,
             launched_at: None,
             last_seen_at: None,
             exited_at: None,
@@ -105,5 +136,23 @@ mod tests {
         assert_eq!(json["status"], "unknown");
         assert_eq!(json["worktreeId"], "wt-1");
         assert_eq!(json["agentDefinitionId"], "codex");
+        assert_eq!(json["processStartTicks"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn launch_result_serializes_last_used_at() {
+        let json = serde_json::to_value(crate::domain::AgentLaunchResult {
+            provider: crate::domain::TerminalProviderId::Warp,
+            agent_id: AgentDefinitionId::from_string("codex"),
+            command: "codex".to_owned(),
+            last_used_at: Some(
+                chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 8, 25, 10, 0, 0).unwrap(),
+            ),
+            session_id: AgentSessionId::from_string("session-1"),
+        })
+        .expect("serialize");
+        assert_eq!(json["lastUsedAt"], "2026-08-25T10:00:00Z");
+        assert_eq!(json["agentId"], "codex");
+        assert_eq!(json["sessionId"], "session-1");
     }
 }

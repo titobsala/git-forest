@@ -10,7 +10,6 @@ pub struct WorktreeId(String);
 pub struct AgentDefinitionId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[allow(dead_code)]
 pub struct AgentSessionId(String);
 
 impl RepositoryId {
@@ -57,17 +56,14 @@ impl AgentDefinitionId {
 }
 
 impl AgentSessionId {
-    #[allow(dead_code)]
     pub fn generate() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
 
-    #[allow(dead_code)]
     pub fn from_string(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         &self.0
     }

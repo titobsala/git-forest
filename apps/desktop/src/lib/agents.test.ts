@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { detectAgents, launchAgent } from "./agents";
+import { detectAgents, launchAgent, listAgentSessions } from "./agents";
 import { invokeCommand } from "./tauri";
 
 vi.mock("./tauri", () => ({
@@ -21,6 +21,8 @@ describe("agent commands", () => {
       provider: "warp",
       agentId: "codex",
       command: "codex",
+      lastUsedAt: "2026-08-25T10:00:00Z",
+      sessionId: "session-1",
     });
 
     await launchAgent("wt-1");
@@ -34,5 +36,10 @@ describe("agent commands", () => {
       worktreeId: "wt-1",
       agentDefinitionId: "claude",
     });
+  });
+
+  it("invokes list_agent_sessions", async () => {
+    await listAgentSessions();
+    expect(invokeCommand).toHaveBeenCalledWith("list_agent_sessions");
   });
 });
