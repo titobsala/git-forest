@@ -22,7 +22,7 @@ import type {
   AgentDefinitionId,
   LocalBranch,
   LocalFileCandidate,
-  LocalFileCopyFailure,
+  LocalFileCopyResult,
   Repository,
   Worktree,
 } from "../../types/forest";
@@ -31,6 +31,13 @@ const CREATE_ONLY = "";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+type CreatedOutcome = {
+  worktree: Worktree;
+  copy: LocalFileCopyResult;
+  agentId: AgentDefinitionId | null;
+  launchError: string | null;
+};
 
 interface CreateWorktreeDialogProps {
   repository: Repository;
@@ -56,8 +63,6 @@ export function CreateWorktreeDialog({
   const [destination, setDestination] = useState<string | null>(null);
   const [localEnvFiles, setLocalEnvFiles] = useState<LocalFileCandidate[]>([]);
   const [copyLocalEnvFiles, setCopyLocalEnvFiles] = useState(true);
-  const [copiedEnvFiles, setCopiedEnvFiles] = useState<string[]>([]);
-  const [copyFailures, setCopyFailures] = useState<LocalFileCopyFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
@@ -65,19 +70,20 @@ export function CreateWorktreeDialog({
     null,
   );
   const [afterCreation, setAfterCreation] = useState(CREATE_ONLY);
-  const [created, setCreated] = useState<Worktree | null>(null);
-  const [pendingAgentId, setPendingAgentId] =
-    useState<AgentDefinitionId | null>(null);
+  const [createdOutcome, setCreatedOutcome] = useState<CreatedOutcome | null>(
+    null,
+  );
   const branchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const afterTouched = useRef(false);
-  const copyChoiceTouched = useRef(false);
 
-  const copyFailed = created !== null && copyFailures.length > 0;
-  const launchFailed = created !== null && pendingAgentId !== null;
-  const creationLocked = created !== null;
+  const creationLocked = createdOutcome !== null;
+  const copyFailed =
+    createdOutcome !== null && createdOutcome.copy.failures.length > 0;
+  const launchFailed =
+    createdOutcome !== null && createdOutcome.launchError !== null;
 
   useEffect(() => {
     previousFocus.current =
@@ -191,15 +197,12 @@ export function CreateWorktreeDialog({
       baseRef,
       branch: branch.trim(),
       name: name.trim() || undefined,
-      copyLocalEnvFiles,
+      copyLocalEnvFiles: false,
     })
       .then((result) => {
         if (!cancelled) {
           setDestination(result.destination);
           setLocalEnvFiles(result.localEnvFiles);
-          if (result.localEnvFiles.length > 0 && !copyChoiceTouched.current) {
-            setCopyLocalEnvFiles(true);
-          }
         }
       })
       .catch(() => {
@@ -211,22 +214,27 @@ export function CreateWorktreeDialog({
     return () => {
       cancelled = true;
     };
-  }, [repository.id, baseRef, branch, name, creationLocked, copyLocalEnvFiles]);
+  }, [repository.id, baseRef, branch, name, creationLocked]);
 
-  async function launchSelected(
-    worktree: Worktree,
-    agentId: AgentDefinitionId,
-  ) {
+  async function launchCreatedAgent(outcome: CreatedOutcome) {
+    if (!outcome.agentId) {
+      return;
+    }
+    const agentId = outcome.agentId;
     try {
-      await launchAgent(worktree.id, agentId);
+      await launchAgent(outcome.worktree.id, agentId);
       onAgentLaunched?.();
       onClose();
     } catch (caught: unknown) {
       const agentName =
         agentDefinitions.find((agent) => agent.id === agentId)?.name ?? agentId;
-      setPendingAgentId(agentId);
-      setError(
-        `Worktree created, but ${agentName} did not launch. ${toCommandError(caught).message}`,
+      setCreatedOutcome((current) =>
+        current
+          ? {
+              ...current,
+              launchError: `Worktree created, but ${agentName} did not launch. ${toCommandError(caught).message}`,
+            }
+          : current,
       );
     }
   }
@@ -244,17 +252,21 @@ export function CreateWorktreeDialog({
         baseRef,
         branch: branch.trim(),
         name: name.trim() || undefined,
-        copyLocalEnvFiles,
+        copyLocalEnvFiles: localEnvFiles.length > 0 && copyLocalEnvFiles,
       });
-      setCreated(result.worktree);
-      setCopiedEnvFiles(result.localEnvCopy.copied);
-      setCopyFailures(result.localEnvCopy.failures);
+      const outcome: CreatedOutcome = {
+        worktree: result.worktree,
+        copy: result.localEnvCopy,
+        agentId: afterCreation || null,
+        launchError: null,
+      };
+      setCreatedOutcome(outcome);
       onCreated(result.worktrees, result.worktree);
-      if (result.localEnvCopy.failures.length > 0) {
+      if (outcome.copy.failures.length > 0) {
         return;
       }
-      if (afterCreation) {
-        await launchSelected(result.worktree, afterCreation);
+      if (outcome.agentId) {
+        await launchCreatedAgent(outcome);
       } else {
         onClose();
       }
@@ -265,27 +277,13 @@ export function CreateWorktreeDialog({
     }
   }
 
-  async function handleRetryLaunch() {
-    if (!created || !pendingAgentId) {
+  async function handlePostCreateLaunch() {
+    if (!createdOutcome?.agentId) {
       return;
     }
-    setError(null);
     setBusy(true);
     try {
-      await launchSelected(created, pendingAgentId);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleLaunchAnyway() {
-    if (!created || !afterCreation) {
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    try {
-      await launchSelected(created, afterCreation);
+      await launchCreatedAgent(createdOutcome);
     } finally {
       setBusy(false);
     }
@@ -320,9 +318,17 @@ export function CreateWorktreeDialog({
           <p className="banner" role="alert">
             {error}
           </p>
-        ) : copyFailed ? (
+        ) : null}
+
+        {copyFailed ? (
           <p className="banner" role="alert">
             Worktree created, but local environment files did not copy
+          </p>
+        ) : null}
+
+        {createdOutcome?.launchError ? (
+          <p className="banner" role="alert">
+            {createdOutcome.launchError}
           </p>
         ) : null}
 
@@ -399,7 +405,6 @@ export function CreateWorktreeDialog({
                   checked={copyLocalEnvFiles}
                   disabled={creationLocked}
                   onChange={(event) => {
-                    copyChoiceTouched.current = true;
                     setCopyLocalEnvFiles(event.target.checked);
                   }}
                 />
@@ -413,48 +418,46 @@ export function CreateWorktreeDialog({
             </div>
           ) : null}
 
-          {copyFailed && !launchFailed ? (
+          {copyFailed && createdOutcome ? (
             <div className="stack">
-              {copiedEnvFiles.length > 0 ? (
+              {createdOutcome.copy.copied.length > 0 ? (
                 <p className="hint font-mono">
-                  Copied: {copiedEnvFiles.join(", ")}
+                  Copied: {createdOutcome.copy.copied.join(", ")}
                 </p>
               ) : null}
               <ul className="hint font-mono">
-                {copyFailures.map((failure) => (
+                {createdOutcome.copy.failures.map((failure) => (
                   <li key={failure.path}>
                     {failure.path}: {failure.error.message}
                   </li>
                 ))}
               </ul>
-              <div className="button-row">
-                <button type="button" className="secondary" onClick={onClose}>
-                  Close
-                </button>
-                {afterCreation ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleLaunchAnyway()}
-                  >
-                    Launch anyway
-                  </button>
-                ) : null}
-              </div>
             </div>
-          ) : launchFailed ? (
+          ) : null}
+
+          {creationLocked ? (
             <div className="button-row">
               <button type="button" className="secondary" onClick={onClose}>
                 Close
               </button>
-              <button
-                ref={retryRef}
-                type="button"
-                disabled={busy}
-                onClick={() => void handleRetryLaunch()}
-              >
-                Retry launch
-              </button>
+              {launchFailed ? (
+                <button
+                  ref={retryRef}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handlePostCreateLaunch()}
+                >
+                  Retry launch
+                </button>
+              ) : copyFailed && createdOutcome?.agentId ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handlePostCreateLaunch()}
+                >
+                  Launch anyway
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="button-row">

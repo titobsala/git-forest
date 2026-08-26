@@ -111,7 +111,7 @@ describe("CreateWorktreeDialog", () => {
       baseRef: "main",
       branch: "feat/demo",
       name: undefined,
-      copyLocalEnvFiles: true,
+      copyLocalEnvFiles: false,
     });
     expect(onCreated).toHaveBeenCalledWith([created], created);
     expect(launchMock).not.toHaveBeenCalled();
@@ -260,6 +260,31 @@ describe("CreateWorktreeDialog", () => {
     expect(
       screen.queryByLabelText("Copy local environment files"),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not preview again when the copy checkbox is toggled", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
+    });
+    renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    const checkbox = await screen.findByLabelText(
+      "Copy local environment files",
+    );
+    const previewCalls = previewMock.mock.calls.length;
+    expect(previewCalls).toBeGreaterThan(0);
+    expect(
+      previewMock.mock.calls.every(
+        (call) => call[0].copyLocalEnvFiles === false,
+      ),
+    ).toBe(true);
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(previewMock).toHaveBeenCalledTimes(previewCalls);
   });
 
   it("defaults the environment copy checkbox on and sends true", async () => {
@@ -411,6 +436,87 @@ describe("CreateWorktreeDialog", () => {
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(launchMock).toHaveBeenCalledTimes(1);
     expect(launchMock).toHaveBeenCalledWith("wt-1", "codex");
+    expect(onAgentLaunched).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps copy failure details when launch anyway fails and retries only launch", async () => {
+    const user = userEvent.setup();
+    previewMock.mockResolvedValue({
+      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      repositorySlug: "exog-app-repo-1",
+      worktreeSlug: "feat-demo",
+      localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: {
+        copied: [".env.local"],
+        failures: [
+          {
+            path: ".env",
+            error: { code: "io", message: "failed to read source" },
+          },
+        ],
+      },
+    });
+    launchMock.mockRejectedValueOnce({
+      code: "agent_unavailable",
+      message: "Codex is not available",
+    });
+    const { onCreated, onClose, onAgentLaunched } = renderDialog();
+    await user.type(screen.getByLabelText("New branch"), "feat/demo");
+    await screen.findByLabelText("Copy local environment files");
+    await user.selectOptions(
+      await screen.findByLabelText("After creation"),
+      "codex",
+    );
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+
+    expect(
+      await screen.findByText(
+        "Worktree created, but local environment files did not copy",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Copied: .env.local")).toBeInTheDocument();
+    expect(screen.getByText(".env: failed to read source")).toBeInTheDocument();
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(launchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Launch anyway" }));
+
+    expect(
+      await screen.findByText(/Worktree created, but Codex did not launch/),
+    ).toHaveTextContent("Codex is not available");
+    expect(
+      screen.getByText(
+        "Worktree created, but local environment files did not copy",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Copied: .env.local")).toBeInTheDocument();
+    expect(screen.getByText(".env: failed to read source")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Launch anyway" }),
+    ).not.toBeInTheDocument();
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(launchMock).toHaveBeenCalledTimes(1);
+    expect(launchMock).toHaveBeenCalledWith("wt-1", "codex");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onAgentLaunched).not.toHaveBeenCalled();
+
+    launchMock.mockResolvedValueOnce({
+      provider: "warp",
+      agentId: "codex",
+      command: "codex",
+      lastUsedAt: "2026-08-25T10:00:00Z",
+      sessionId: "session-1",
+    });
+    await user.click(screen.getByRole("button", { name: "Retry launch" }));
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(launchMock).toHaveBeenCalledTimes(2);
+    expect(launchMock).toHaveBeenLastCalledWith("wt-1", "codex");
     expect(onAgentLaunched).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalled();
   });

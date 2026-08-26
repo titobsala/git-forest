@@ -25,6 +25,9 @@ mod terminals;
 mod worktree_seeds;
 mod worktrees;
 
+#[cfg(test)]
+mod worktrees_tests;
+
 const DEFAULT_PID_POLL_ATTEMPTS: u32 = 5;
 const DEFAULT_PID_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
