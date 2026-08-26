@@ -66,4 +66,64 @@ describe("useWorktreeIndex", () => {
     });
     expect(refreshWorktrees).not.toHaveBeenCalledWith("repo-2");
   });
+
+  it("drops cached worktrees when a repository becomes unavailable", async () => {
+    const { result, rerender } = renderHook(
+      ({ repositories }) => useWorktreeIndex(repositories),
+      { initialProps: { repositories: [sampleRepository()] } },
+    );
+
+    act(() => {
+      result.current.ensureLoaded("repo-1");
+    });
+    await waitFor(() => {
+      expect(result.current.flat[0]?.worktree.id).toBe("wt-1");
+    });
+    expect(result.current.entryFor("repo-1").status).toBe("ready");
+
+    rerender({
+      repositories: [sampleRepository({ health: "missing" })],
+    });
+
+    expect(result.current.flat).toEqual([]);
+    expect(result.current.entryFor("repo-1")).toEqual({
+      status: "idle",
+      worktrees: [],
+      error: null,
+    });
+  });
+
+  it("reloads worktrees after an unavailable repository becomes available", async () => {
+    const { result, rerender } = renderHook(
+      ({ repositories }) => useWorktreeIndex(repositories),
+      { initialProps: { repositories: [sampleRepository()] } },
+    );
+
+    act(() => {
+      result.current.ensureLoaded("repo-1");
+    });
+    await waitFor(() => {
+      expect(result.current.flat[0]?.worktree.id).toBe("wt-1");
+    });
+    const loadsAfterReady = vi.mocked(listWorktrees).mock.calls.length;
+
+    rerender({
+      repositories: [sampleRepository({ health: "invalid" })],
+    });
+    expect(result.current.flat).toEqual([]);
+
+    vi.mocked(listWorktrees).mockResolvedValue([
+      sampleWorktree({ id: "wt-fresh" }),
+    ]);
+    rerender({
+      repositories: [sampleRepository()],
+    });
+
+    await waitFor(() => {
+      expect(result.current.flat[0]?.worktree.id).toBe("wt-fresh");
+    });
+    expect(vi.mocked(listWorktrees).mock.calls.length).toBeGreaterThan(
+      loadsAfterReady,
+    );
+  });
 });
