@@ -13,6 +13,7 @@ describe("isDirty", () => {
     expect(isDirty(sampleWorktree({ trackedChanges: 1 }))).toBe(true);
     expect(isDirty(sampleWorktree({ untrackedFiles: 1 }))).toBe(true);
     expect(isDirty(sampleWorktree())).toBe(false);
+    expect(isDirty(sampleWorktree({ ignoredFiles: 3 }))).toBe(false);
   });
 });
 
@@ -52,6 +53,14 @@ describe("telemetryBadges", () => {
     expect(badges[0]?.title).toContain("1 untracked");
   });
 
+  it("adds a neutral ignored badge without marking the worktree dirty", () => {
+    const badges = telemetryBadges(sampleWorktree({ ignoredFiles: 2 }));
+    expect(isDirty(sampleWorktree({ ignoredFiles: 2 }))).toBe(false);
+    expect(badges.map((badge) => badge.id)).toEqual(["clean", "ignored"]);
+    expect(badges[1]?.label).toBe("2 ignored");
+    expect(badges[1]?.tone).toBe("neutral");
+  });
+
   it("puts blocking conditions before status", () => {
     const badges = telemetryBadges(
       sampleWorktree({ present: false, locked: true, trackedChanges: 1 }),
@@ -68,6 +77,31 @@ describe("telemetryBadges", () => {
     const badges = telemetryBadges(sampleWorktree({ present: false }));
 
     expect(badges.map((badge) => badge.id)).not.toContain("clean");
+  });
+
+  it("surfaces a status error instead of claiming the worktree is clean", () => {
+    const badges = telemetryBadges(
+      sampleWorktree({
+        statusError: {
+          code: "git_command_failed",
+          message: "index unreadable",
+        },
+      }),
+    );
+
+    expect(badges.map((badge) => badge.id)).toEqual(["status"]);
+    expect(badges[0]?.title).toBe("index unreadable");
+  });
+
+  it("includes the git prunable reason in the badge title", () => {
+    const badges = telemetryBadges(
+      sampleWorktree({ prunable: true, prunableReason: "git dir gone" }),
+    );
+
+    expect(badges.map((badge) => badge.id)).toContain("prunable");
+    expect(badges.find((badge) => badge.id === "prunable")?.title).toBe(
+      "git dir gone",
+    );
   });
 });
 

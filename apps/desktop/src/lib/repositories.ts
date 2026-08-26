@@ -37,3 +37,14 @@ export async function refreshRepository(
 export async function removeRepository(id: RepositoryId): Promise<ForestState> {
   return invokeCommand<ForestState>("remove_repository", { id });
 }
+
+export async function reconcileRepositories(): Promise<ForestState> {
+  return invokeCommand<ForestState>("reconcile_repositories");
+}
+
+export async function relocateRepository(
+  id: RepositoryId,
+  path: string,
+): Promise<ForestState> {
+  return invokeCommand<ForestState>("relocate_repository", { id, path });
+}

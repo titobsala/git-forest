@@ -126,6 +126,75 @@ pub fn has_active_session(
     Ok(count > 0)
 }
 
+pub fn has_protected_session(
+    conn: &Connection,
+    worktree_id: &WorktreeId,
+) -> Result<bool, ForestError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM agent_sessions
+         WHERE worktree_id = ?1 AND status IN ('starting', 'running', 'unknown')",
+        [worktree_id.as_str()],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+pub fn list_all(conn: &Connection) -> Result<Vec<WorktreeRecord>, ForestError> {
+    let mut statement = conn.prepare(
+        "SELECT id, repository_id, name, path, branch, created_at, updated_at, last_used_at
+         FROM worktrees
+         ORDER BY name COLLATE NOCASE, path",
+    )?;
+    let rows = statement.query_map([], read_row)?;
+    let mut records = Vec::new();
+    for row in rows {
+        records.push(map_record(row?)?);
+    }
+    Ok(records)
+}
+
+pub fn count_sessions_for_worktree(
+    conn: &Connection,
+    worktree_id: &WorktreeId,
+) -> Result<u32, ForestError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM agent_sessions WHERE worktree_id = ?1",
+        [worktree_id.as_str()],
+        |row| row.get(0),
+    )?;
+    Ok(count as u32)
+}
+
+pub fn update_worktree_path(
+    conn: &Connection,
+    id: &WorktreeId,
+    path: &Path,
+    updated_at: DateTime<Utc>,
+) -> Result<(), ForestError> {
+    let changed = conn.execute(
+        "UPDATE worktrees SET path = ?2, updated_at = ?3 WHERE id = ?1",
+        params![
+            id.as_str(),
+            path.to_string_lossy().as_ref(),
+            updated_at.to_rfc3339()
+        ],
+    )?;
+    if changed == 0 {
+        return Err(ForestError::WorktreeNotFound);
+    }
+    Ok(())
+}
+
+pub fn delete_worktrees(conn: &Connection, ids: &[WorktreeId]) -> Result<u32, ForestError> {
+    let mut removed = 0_u32;
+    for id in ids {
+        if delete_worktree(conn, id)? {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 type WorktreeRow = (
     String,
     String,

@@ -26,12 +26,14 @@ describe("worktree commands", () => {
       repositoryId: "repo-1",
       baseRef: "main",
       branch: "feat/demo",
+      copyLocalEnvFiles: true,
     });
     expect(invokeCommand).toHaveBeenCalledWith("create_worktree", {
       input: {
         repositoryId: "repo-1",
         baseRef: "main",
         branch: "feat/demo",
+        copyLocalEnvFiles: true,
       },
     });
 

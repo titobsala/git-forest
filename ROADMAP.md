@@ -5,7 +5,7 @@
 Current implementation:
 
 ```text
-Release 0.0.8
+Release 0.1.0
 ```
 
 Completed:
@@ -19,12 +19,14 @@ Completed:
 0.0.6 Agent Runner System
 0.0.7 Quick Launcher
 0.0.8 Sessions & Process Tracking
+0.0.9 Safety, Reconciliation & Cleanup
+0.1.0 Internal Alpha
 ```
 
 Next:
 
 ```text
-0.0.9 Safety, Reconciliation & Cleanup
+0.2.0 Forest Cockpit
 ```
 
 The 1.0 release remains the first complete local MVP. `WorkspaceSession` from the original 0.0.2 type list is **not** part of Release 0.0.8; that release tracks `AgentSession` only. Generic terminal/editor activity remains unscheduled.
@@ -1297,6 +1299,10 @@ agent sessions after launches and application restarts.
 
 # Release 0.0.9 — Safety, Reconciliation & Cleanup
 
+Status: **complete**.
+
+Internal gate only: packaged as part of Release 0.1.0, not a separate version or bundle.
+
 ## Goal
 
 Make Forest trustworthy enough to use on real development repositories every day.
@@ -1378,6 +1384,8 @@ Forest survives common external changes without corrupting its own state or dest
 ---
 
 # Release 0.1.0 — Internal Alpha
+
+Status: **complete**.
 
 ## Goal
 

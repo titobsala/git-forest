@@ -71,6 +71,15 @@ export function telemetryBadges(worktree: Worktree): TelemetryBadge[] {
     });
   }
 
+  if (worktree.statusError) {
+    badges.push({
+      id: "status",
+      label: "status",
+      tone: "high",
+      title: worktree.statusError.message,
+    });
+  }
+
   if (worktree.locked) {
     badges.push({
       id: "locked",
@@ -85,7 +94,7 @@ export function telemetryBadges(worktree: Worktree): TelemetryBadge[] {
       id: "prunable",
       label: "prunable",
       tone: "mod",
-      title: "Git reports this worktree as prunable",
+      title: worktree.prunableReason ?? "Git reports this worktree as prunable",
     });
   }
 
@@ -105,12 +114,21 @@ export function telemetryBadges(worktree: Worktree): TelemetryBadge[] {
       tone: "high",
       title: `Uncommitted changes: ${detail}`,
     });
-  } else if (worktree.present && worktree.gitKnown) {
+  } else if (worktree.present && worktree.gitKnown && !worktree.statusError) {
     badges.push({
       id: "clean",
       label: "clean",
       tone: "good",
       title: "No uncommitted changes",
+    });
+  }
+
+  if (worktree.ignoredFiles > 0) {
+    badges.push({
+      id: "ignored",
+      label: `${worktree.ignoredFiles} ignored`,
+      tone: "neutral",
+      title: `${worktree.ignoredFiles} ignored local file${worktree.ignoredFiles === 1 ? "" : "s"}`,
     });
   }
 

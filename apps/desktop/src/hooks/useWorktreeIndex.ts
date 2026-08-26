@@ -17,10 +17,16 @@
  * on-demand requests ahead of background ones — and the background pass waits
  * for an idle slot and stands down entirely while a native mutation is in
  * flight. A user command then waits for at most one repository.
+ *
+ * Cached rows are dropped when a repository leaves the forest or is no longer
+ * available. Refresh Forest can mark a previously loaded root missing,
+ * invalid, or unavailable; keeping the old ready entry would leave stale
+ * worktrees in the launcher, tray counts, and an expanded cockpit group.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../lib/errors";
+import { isRepositoryAvailable } from "../lib/repository-health";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
 import type {
   Repository,
@@ -91,6 +97,10 @@ export function useWorktreeIndex(
   const paused = options.paused ?? false;
 
   const [entries, setEntries] = useState<IndexState>({});
+  const repositoriesRef = useRef(repositories);
+  repositoriesRef.current = repositories;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   // Mirror of the per-repository status, readable synchronously so callbacks
   // can decide whether to queue a load without touching the state updater.
@@ -107,42 +117,75 @@ export function useWorktreeIndex(
     };
   }, []);
 
-  const load = useCallback(async ({ id, mode }: QueuedLoad): Promise<void> => {
-    try {
-      const worktrees =
-        mode === "refresh"
-          ? await refreshWorktrees(id)
-          : await listWorktrees(id);
-      statuses.current.set(id, "ready");
-      if (mounted.current) {
-        setEntries((current) => ({
-          ...current,
-          [id]: { status: "ready", worktrees, error: null },
-        }));
+  const forget = useCallback((id: RepositoryId) => {
+    statuses.current.delete(id);
+    queue.current = queue.current.filter((item) => item.id !== id);
+    setEntries((current) => {
+      if (!(id in current)) {
+        return current;
       }
-    } catch (caught: unknown) {
-      statuses.current.set(id, "error");
-      if (mounted.current) {
-        setEntries((current) => ({
-          ...current,
-          [id]: {
-            status: "error",
-            worktrees: current[id]?.worktrees ?? [],
-            error: errorMessage(caught),
-          },
-        }));
-      }
-    }
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   }, []);
+
+  const load = useCallback(
+    async ({ id, mode }: QueuedLoad): Promise<void> => {
+      try {
+        const worktrees =
+          mode === "refresh"
+            ? await refreshWorktrees(id)
+            : await listWorktrees(id);
+        const repository = repositoriesRef.current.find(
+          (item) => item.id === id,
+        );
+        if (!repository || !isRepositoryAvailable(repository)) {
+          forget(id);
+          return;
+        }
+        statuses.current.set(id, "ready");
+        if (mounted.current) {
+          setEntries((current) => ({
+            ...current,
+            [id]: { status: "ready", worktrees, error: null },
+          }));
+        }
+      } catch (caught: unknown) {
+        const repository = repositoriesRef.current.find(
+          (item) => item.id === id,
+        );
+        if (!repository || !isRepositoryAvailable(repository)) {
+          forget(id);
+          return;
+        }
+        statuses.current.set(id, "error");
+        if (mounted.current) {
+          setEntries((current) => ({
+            ...current,
+            [id]: {
+              status: "error",
+              worktrees: current[id]?.worktrees ?? [],
+              error: errorMessage(caught),
+            },
+          }));
+        }
+      }
+    },
+    [forget],
+  );
 
   /** Run queued listings one at a time until the queue empties. */
   const drain = useCallback(async () => {
-    if (running.current) {
+    if (running.current || pausedRef.current) {
       return;
     }
     running.current = true;
     try {
       for (;;) {
+        if (pausedRef.current) {
+          return;
+        }
         const next = queue.current.shift();
         if (!next) {
           return;
@@ -156,6 +199,10 @@ export function useWorktreeIndex(
 
   const enqueue = useCallback(
     (id: RepositoryId, mode: LoadMode, priority: "user" | "background") => {
+      const repository = repositoriesRef.current.find((item) => item.id === id);
+      if (!repository || !isRepositoryAvailable(repository)) {
+        return;
+      }
       if (statuses.current.get(id) === "loading") {
         // Already queued or in flight. A refresh still upgrades a plain
         // listing that has not started yet, so the newer intent wins.
@@ -206,6 +253,15 @@ export function useWorktreeIndex(
     [enqueue],
   );
 
+  const refreshAll = useCallback(
+    (repositoryIds: RepositoryId[]) => {
+      for (const id of repositoryIds) {
+        enqueue(id, "refresh", "user");
+      }
+    },
+    [enqueue],
+  );
+
   /** Replace a repository's rows after a create/remove mutation. */
   const setWorktrees = useCallback(
     (id: RepositoryId, worktrees: Worktree[]) => {
@@ -244,19 +300,24 @@ export function useWorktreeIndex(
     });
   }, []);
 
-  /** Forget a repository that left the forest. */
-  const forget = useCallback((id: RepositoryId) => {
-    statuses.current.delete(id);
-    queue.current = queue.current.filter((item) => item.id !== id);
-    setEntries((current) => {
-      if (!(id in current)) {
-        return current;
+  useEffect(() => {
+    if (!paused) {
+      void drain();
+    }
+  }, [paused, drain]);
+
+  useEffect(() => {
+    const available = new Set(
+      repositories
+        .filter(isRepositoryAvailable)
+        .map((repository) => repository.id),
+    );
+    for (const id of [...statuses.current.keys()]) {
+      if (!available.has(id)) {
+        forget(id);
       }
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
-  }, []);
+    }
+  }, [repositories, forget]);
 
   // Background pass: queue at most one repository per idle slot, and only once
   // the queue has drained. Each completed load updates `entries`, which
@@ -267,6 +328,7 @@ export function useWorktreeIndex(
     }
     const pending = repositories.find(
       (repository) =>
+        isRepositoryAvailable(repository) &&
         (statuses.current.get(repository.id) ?? "idle") === "idle",
     );
     if (!pending) {
@@ -278,14 +340,23 @@ export function useWorktreeIndex(
   }, [repositories, entries, enqueue, paused]);
 
   const entryFor = useCallback(
-    (id: RepositoryId): WorktreeIndexEntry => entries[id] ?? EMPTY_ENTRY,
-    [entries],
+    (id: RepositoryId): WorktreeIndexEntry => {
+      const repository = repositories.find((item) => item.id === id);
+      if (!repository || !isRepositoryAvailable(repository)) {
+        return EMPTY_ENTRY;
+      }
+      return entries[id] ?? EMPTY_ENTRY;
+    },
+    [entries, repositories],
   );
 
   /** Flat repository+worktree pairs, for the launcher and tray counters. */
   const flat = useMemo<RepositoryWorktree[]>(() => {
     const rows: RepositoryWorktree[] = [];
     for (const repository of repositories) {
+      if (!isRepositoryAvailable(repository)) {
+        continue;
+      }
       for (const worktree of entries[repository.id]?.worktrees ?? []) {
         rows.push({ repository, worktree });
       }
@@ -297,6 +368,7 @@ export function useWorktreeIndex(
     entryFor,
     ensureLoaded,
     refresh,
+    refreshAll,
     setWorktrees,
     touchWorktree,
     forget,

@@ -37,6 +37,7 @@ interface CockpitViewProps {
   onNewWorktree: () => void;
   onOpenTerminal?: (worktree: Worktree) => void;
   onLaunchAgent?: (worktree: Worktree) => void;
+  onLocateRepository?: (id: RepositoryId) => void;
   hasActiveSession?: (worktree: Worktree) => boolean;
   primarySession?: (worktreeId: WorktreeId) => AgentSession | null;
 }
@@ -54,6 +55,7 @@ export function CockpitView({
   onNewWorktree,
   onOpenTerminal,
   onLaunchAgent,
+  onLocateRepository,
   hasActiveSession,
   primarySession,
 }: CockpitViewProps) {
@@ -171,7 +173,7 @@ export function CockpitView({
       case "selection.open": {
         event.preventDefault();
         const active = rows.find((row) => row.worktree.id === activeWorktreeId);
-        if (active && onOpenTerminal) {
+        if (active?.worktree.present && onOpenTerminal) {
           onOpenTerminal(active.worktree);
         }
         break;
@@ -179,7 +181,7 @@ export function CockpitView({
       case "selection.agent": {
         event.preventDefault();
         const active = rows.find((row) => row.worktree.id === activeWorktreeId);
-        if (active && onLaunchAgent) {
+        if (active?.worktree.present && onLaunchAgent) {
           onLaunchAgent(active.worktree);
         }
         break;
@@ -250,6 +252,7 @@ export function CockpitView({
               onLaunchAgent={onLaunchAgent}
               sessionFor={primarySession}
               agentNameFor={agentNameFor}
+              onLocate={onLocateRepository}
             />
           ))}
         </div>

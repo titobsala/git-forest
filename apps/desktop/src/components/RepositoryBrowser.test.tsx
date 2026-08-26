@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { RepositoryBrowser } from "./RepositoryBrowser";
 import { sampleRepository } from "../types/forest";
@@ -24,6 +24,7 @@ describe("RepositoryBrowser", () => {
         onSelect={vi.fn()}
         onRefresh={vi.fn()}
         onRemove={vi.fn()}
+        onLocate={vi.fn()}
       />,
     );
 
@@ -50,6 +51,7 @@ describe("RepositoryBrowser", () => {
         onSelect={vi.fn()}
         onRefresh={vi.fn()}
         onRemove={vi.fn()}
+        onLocate={vi.fn()}
       />,
     );
 
@@ -84,7 +86,30 @@ describe("RepositoryBrowser", () => {
     expect(
       screen.getByText("Remove from Forest? The directory stays on disk."),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+    fireEvent.click(
+      within(
+        screen.getByRole("region", { name: "Remove repository" }),
+      ).getByRole("button", { name: "Remove from Forest" }),
+    );
     expect(onRemove).toHaveBeenCalledWith("repo-1");
+  });
+
+  it("offers Locate repository for missing health without parsing messages", () => {
+    const onLocate = vi.fn();
+    render(
+      <RepositoryBrowser
+        repositories={[sampleRepository({ health: "missing" })]}
+        busy={false}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onRefresh={vi.fn()}
+        onRemove={vi.fn()}
+        onLocate={onLocate}
+      />,
+    );
+
+    expect(screen.getByText("Missing or moved")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Locate repository…" }));
+    expect(onLocate).toHaveBeenCalledWith("repo-1");
   });
 });

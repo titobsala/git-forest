@@ -10,6 +10,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/002_repository_metadata.sql"),
     include_str!("../../migrations/003_worktree_recency.sql"),
     include_str!("../../migrations/004_agent_session_process_identity.sql"),
+    include_str!("../../migrations/005_repository_reconciliation.sql"),
 ];
 
 pub struct Database {
@@ -269,7 +270,7 @@ mod tests {
             .expect("seed session");
 
         let version = db.migrate().expect("upgrade");
-        assert_eq!(version, 4);
+        assert_eq!(version, MIGRATIONS.len() as u32);
 
         let (status, pid, ticks) = db
             .connection()
@@ -288,6 +289,71 @@ mod tests {
         assert_eq!(status, "running");
         assert_eq!(pid, Some(4242));
         assert_eq!(ticks, None);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn migration_005_preserves_existing_repository_rows_as_unknown() {
+        let (root, path) = temp_db_path();
+        let db = Database::open(&path).expect("open");
+        db.connection()
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY NOT NULL,
+                    applied_at TEXT NOT NULL
+                );",
+            )
+            .expect("migrations table");
+        db.connection().execute_batch(MIGRATIONS[0]).expect("001");
+        db.connection().execute_batch(MIGRATIONS[1]).expect("002");
+        db.connection().execute_batch(MIGRATIONS[2]).expect("003");
+        db.connection().execute_batch(MIGRATIONS[3]).expect("004");
+        db.connection()
+            .execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES
+                 (1, '2026-08-20T09:00:00Z'),
+                 (2, '2026-08-20T09:00:00Z'),
+                 (3, '2026-08-20T09:00:00Z'),
+                 (4, '2026-08-20T09:00:00Z')",
+                [],
+            )
+            .expect("mark 001-004");
+        db.connection()
+            .execute(
+                "INSERT INTO repositories (id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at)
+                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', 'main', 'https://example.test/exog.git', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                [],
+            )
+            .expect("seed repo");
+
+        let version = db.migrate().expect("upgrade");
+        assert_eq!(version, 5);
+        assert_eq!(version, MIGRATIONS.len() as u32);
+
+        let (name, branch, remote, health, detail, reconciled) = db
+            .connection()
+            .query_row(
+                "SELECT name, primary_branch, remote_url, health, health_detail, last_reconciled_at
+                 FROM repositories WHERE id = 'repo-1'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                    ))
+                },
+            )
+            .expect("row");
+        assert_eq!(name, "EXOG App");
+        assert_eq!(branch.as_deref(), Some("main"));
+        assert_eq!(remote.as_deref(), Some("https://example.test/exog.git"));
+        assert_eq!(health, "unknown");
+        assert_eq!(detail, None);
+        assert_eq!(reconciled, None);
         let _ = std::fs::remove_dir_all(root);
     }
 }

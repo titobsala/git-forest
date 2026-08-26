@@ -3,37 +3,97 @@
  *
  * Carries over the release 0.0.4 creation flow (base ref, new branch,
  * optional directory name, live destination preview) into the cockpit as a
- * modal, so the central stage stays a list rather than a form.
+ * modal, so the central stage stays a list rather than a form. After a
+ * successful create, an optional agent launch uses the existing launch
+ * command; a launch failure never retries creation.
  */
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { errorMessage } from "../../lib/errors";
+import { detectAgents, launchAgent } from "../../lib/agents";
+import { toCommandError } from "../../lib/errors";
 import {
   createWorktree,
   listLocalBranches,
   previewCreateWorktree,
 } from "../../lib/worktrees";
-import type { LocalBranch, Repository, Worktree } from "../../types/forest";
+import type {
+  AgentAvailability,
+  AgentDefinition,
+  AgentDefinitionId,
+  LocalBranch,
+  LocalFileCandidate,
+  LocalFileCopyResult,
+  Repository,
+  Worktree,
+} from "../../types/forest";
+
+const CREATE_ONLY = "";
+
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+type CreatedOutcome = {
+  worktree: Worktree;
+  copy: LocalFileCopyResult;
+  agentId: AgentDefinitionId | null;
+  launchError: string | null;
+};
 
 interface CreateWorktreeDialogProps {
   repository: Repository;
+  agentDefinitions: AgentDefinition[];
+  defaultAgentId: AgentDefinitionId;
   onClose: () => void;
   onCreated: (worktrees: Worktree[], created: Worktree) => void;
+  onAgentLaunched?: () => void;
 }
 
 export function CreateWorktreeDialog({
   repository,
+  agentDefinitions,
+  defaultAgentId,
   onClose,
   onCreated,
+  onAgentLaunched,
 }: CreateWorktreeDialogProps) {
   const [branches, setBranches] = useState<LocalBranch[]>([]);
   const [baseRef, setBaseRef] = useState("main");
   const [branch, setBranch] = useState("");
   const [name, setName] = useState("");
   const [destination, setDestination] = useState<string | null>(null);
+  const [localEnvFiles, setLocalEnvFiles] = useState<LocalFileCandidate[]>([]);
+  const [copyLocalEnvFiles, setCopyLocalEnvFiles] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [availability, setAvailability] = useState<AgentAvailability[]>([]);
+  const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(
+    null,
+  );
+  const [afterCreation, setAfterCreation] = useState(CREATE_ONLY);
+  const [createdOutcome, setCreatedOutcome] = useState<CreatedOutcome | null>(
+    null,
+  );
   const branchRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const afterTouched = useRef(false);
+
+  const creationLocked = createdOutcome !== null;
+  const copyFailed =
+    createdOutcome !== null && createdOutcome.copy.failures.length > 0;
+  const launchFailed =
+    createdOutcome !== null && createdOutcome.launchError !== null;
+
+  useEffect(() => {
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    return () => {
+      previousFocus.current?.focus();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +111,7 @@ export function CreateWorktreeDialog({
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
-          setError(errorMessage(caught));
+          setError(toCommandError(caught).message);
         }
       });
     return () => {
@@ -60,12 +120,75 @@ export function CreateWorktreeDialog({
   }, [repository.id]);
 
   useEffect(() => {
-    branchRef.current?.focus();
-  }, []);
+    let cancelled = false;
+    void detectAgents()
+      .then((next) => {
+        if (cancelled) {
+          return;
+        }
+        setAvailability(next);
+        const configured = next.find((item) => item.id === defaultAgentId);
+        if (configured?.installed && !afterTouched.current) {
+          setAfterCreation(defaultAgentId);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setAvailabilityWarning(toCommandError(caught).message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultAgentId]);
 
   useEffect(() => {
-    if (!branch.trim()) {
-      setDestination(null);
+    if (launchFailed) {
+      retryRef.current?.focus();
+      return;
+    }
+    branchRef.current?.focus();
+  }, [launchFailed]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) {
+        return;
+      }
+      const nodes = [
+        ...dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ].filter(
+        (node) => !node.hasAttribute("disabled") && node.tabIndex !== -1,
+      );
+      if (nodes.length === 0) {
+        return;
+      }
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!branch.trim() || creationLocked) {
+      if (!branch.trim()) {
+        setDestination(null);
+        setLocalEnvFiles([]);
+      }
       return;
     }
     let cancelled = false;
@@ -74,24 +197,53 @@ export function CreateWorktreeDialog({
       baseRef,
       branch: branch.trim(),
       name: name.trim() || undefined,
+      copyLocalEnvFiles: false,
     })
       .then((result) => {
         if (!cancelled) {
           setDestination(result.destination);
+          setLocalEnvFiles(result.localEnvFiles);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setDestination(null);
+          setLocalEnvFiles([]);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [repository.id, baseRef, branch, name]);
+  }, [repository.id, baseRef, branch, name, creationLocked]);
+
+  async function launchCreatedAgent(outcome: CreatedOutcome) {
+    if (!outcome.agentId) {
+      return;
+    }
+    const agentId = outcome.agentId;
+    try {
+      await launchAgent(outcome.worktree.id, agentId);
+      onAgentLaunched?.();
+      onClose();
+    } catch (caught: unknown) {
+      const agentName =
+        agentDefinitions.find((agent) => agent.id === agentId)?.name ?? agentId;
+      setCreatedOutcome((current) =>
+        current
+          ? {
+              ...current,
+              launchError: `Worktree created, but ${agentName} did not launch. ${toCommandError(caught).message}`,
+            }
+          : current,
+      );
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (creationLocked) {
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -100,19 +252,51 @@ export function CreateWorktreeDialog({
         baseRef,
         branch: branch.trim(),
         name: name.trim() || undefined,
+        copyLocalEnvFiles: localEnvFiles.length > 0 && copyLocalEnvFiles,
       });
+      const outcome: CreatedOutcome = {
+        worktree: result.worktree,
+        copy: result.localEnvCopy,
+        agentId: afterCreation || null,
+        launchError: null,
+      };
+      setCreatedOutcome(outcome);
       onCreated(result.worktrees, result.worktree);
-      onClose();
+      if (outcome.copy.failures.length > 0) {
+        return;
+      }
+      if (outcome.agentId) {
+        await launchCreatedAgent(outcome);
+      } else {
+        onClose();
+      }
     } catch (caught: unknown) {
-      setError(errorMessage(caught));
+      setError(toCommandError(caught).message);
     } finally {
       setBusy(false);
     }
   }
 
+  async function handlePostCreateLaunch() {
+    if (!createdOutcome?.agentId) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await launchCreatedAgent(createdOutcome);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function agentInstalled(id: AgentDefinitionId): boolean {
+    return availability.some((item) => item.id === id && item.installed);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-scrim p-4 pt-[14vh] backdrop-blur-sm">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-worktree-heading"
@@ -126,9 +310,25 @@ export function CreateWorktreeDialog({
           is not supported yet.
         </p>
 
+        {availabilityWarning ? (
+          <p className="hint">{availabilityWarning}</p>
+        ) : null}
+
         {error ? (
           <p className="banner" role="alert">
             {error}
+          </p>
+        ) : null}
+
+        {copyFailed ? (
+          <p className="banner" role="alert">
+            Worktree created, but local environment files did not copy
+          </p>
+        ) : null}
+
+        {createdOutcome?.launchError ? (
+          <p className="banner" role="alert">
+            {createdOutcome.launchError}
           </p>
         ) : null}
 
@@ -138,6 +338,7 @@ export function CreateWorktreeDialog({
             <select
               value={baseRef}
               onChange={(event) => setBaseRef(event.target.value)}
+              disabled={creationLocked}
             >
               {branches.map((item) => (
                 <option key={item.name} value={item.name}>
@@ -155,6 +356,7 @@ export function CreateWorktreeDialog({
               onChange={(event) => setBranch(event.target.value)}
               autoComplete="off"
               spellCheck={false}
+              disabled={creationLocked}
             />
           </label>
 
@@ -165,21 +367,108 @@ export function CreateWorktreeDialog({
               onChange={(event) => setName(event.target.value)}
               autoComplete="off"
               spellCheck={false}
+              disabled={creationLocked}
             />
+          </label>
+
+          <label className="field">
+            <span>After creation</span>
+            <select
+              value={afterCreation}
+              onChange={(event) => {
+                afterTouched.current = true;
+                setAfterCreation(event.target.value);
+              }}
+              disabled={creationLocked}
+            >
+              <option value={CREATE_ONLY}>Create only</option>
+              {agentDefinitions.map((agent) => {
+                const installed = agentInstalled(agent.id);
+                return (
+                  <option key={agent.id} value={agent.id} disabled={!installed}>
+                    {installed ? agent.name : `${agent.name} (Missing)`}
+                  </option>
+                );
+              })}
+            </select>
           </label>
 
           {destination ? (
             <p className="hint font-mono">Destination: {destination}</p>
           ) : null}
 
-          <div className="button-row">
-            <button type="button" className="secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || branch.trim() === ""}>
-              Create worktree
-            </button>
-          </div>
+          {localEnvFiles.length > 0 ? (
+            <div className="field">
+              <label className="flex items-center gap-1.5 text-body">
+                <input
+                  type="checkbox"
+                  checked={copyLocalEnvFiles}
+                  disabled={creationLocked}
+                  onChange={(event) => {
+                    setCopyLocalEnvFiles(event.target.checked);
+                  }}
+                />
+                Copy local environment files
+              </label>
+              <ul className="hint font-mono">
+                {localEnvFiles.map((file) => (
+                  <li key={file.path}>{file.path}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {copyFailed && createdOutcome ? (
+            <div className="stack">
+              {createdOutcome.copy.copied.length > 0 ? (
+                <p className="hint font-mono">
+                  Copied: {createdOutcome.copy.copied.join(", ")}
+                </p>
+              ) : null}
+              <ul className="hint font-mono">
+                {createdOutcome.copy.failures.map((failure) => (
+                  <li key={failure.path}>
+                    {failure.path}: {failure.error.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {creationLocked ? (
+            <div className="button-row">
+              <button type="button" className="secondary" onClick={onClose}>
+                Close
+              </button>
+              {launchFailed ? (
+                <button
+                  ref={retryRef}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handlePostCreateLaunch()}
+                >
+                  Retry launch
+                </button>
+              ) : copyFailed && createdOutcome?.agentId ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handlePostCreateLaunch()}
+                >
+                  Launch anyway
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="button-row">
+              <button type="button" className="secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="submit" disabled={busy || branch.trim() === ""}>
+                Create worktree
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

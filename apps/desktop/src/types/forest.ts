@@ -4,6 +4,8 @@ export type AgentDefinitionId = string;
 export type AgentSessionId = string;
 
 export type RepositoryMode = "managed" | "linked";
+export type RepositoryHealth =
+  "unknown" | "available" | "missing" | "invalid" | "unavailable";
 export type TerminalProviderId = "warp";
 export type WorktreeNamingStrategy = "branch_slug" | "branch_as_is";
 export type LaunchBehavior = "auto" | "tab" | "window";
@@ -41,6 +43,9 @@ export interface Repository {
   primaryBranch: string | null;
   remoteUrl: string | null;
   lastRefreshedAt: string | null;
+  health: RepositoryHealth;
+  healthDetail: string | null;
+  lastReconciledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,16 +61,19 @@ export interface Worktree {
   locked: boolean;
   lockReason: string | null;
   prunable: boolean;
+  prunableReason: string | null;
   present: boolean;
   gitKnown: boolean;
   isPrimary: boolean;
   trackedChanges: number;
   untrackedFiles: number;
+  ignoredFiles: number;
   ahead: number | null;
   behind: number | null;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
+  statusError: CommandError | null;
 }
 
 export type RemovalBlocker =
@@ -75,10 +83,26 @@ export type RemovalBlocker =
   | "unknown_to_git"
   | "dirty"
   | "untracked"
-  | "active_session";
+  | "active_session"
+  | "status_unavailable";
 
 export interface LocalBranch {
   name: string;
+}
+
+export interface LocalFileCandidate {
+  path: string;
+  sizeBytes: number;
+}
+
+export interface LocalFileCopyFailure {
+  path: string;
+  error: CommandError;
+}
+
+export interface LocalFileCopyResult {
+  copied: string[];
+  failures: LocalFileCopyFailure[];
 }
 
 export interface CreateWorktreeInput {
@@ -86,17 +110,20 @@ export interface CreateWorktreeInput {
   baseRef: string;
   branch: string;
   name?: string;
+  copyLocalEnvFiles: boolean;
 }
 
 export interface CreateWorktreePreview {
   destination: string;
   repositorySlug: string;
   worktreeSlug: string;
+  localEnvFiles: LocalFileCandidate[];
 }
 
 export interface CreateWorktreeResult {
   worktree: Worktree;
   worktrees: Worktree[];
+  localEnvCopy: LocalFileCopyResult;
 }
 
 export interface WorktreeRemovalPreview {
@@ -216,9 +243,66 @@ export interface ImportRepositoriesResult {
   state: ForestState;
 }
 
+export type CleanupCategory =
+  "git_worktrees" | "forest_metadata" | "warp_configs" | "finished_sessions";
+
+export interface CleanupRequest {
+  pruneGitWorktrees: boolean;
+  removeForestMetadata: boolean;
+  removeWarpConfigs: boolean;
+  removeFinishedSessions: boolean;
+}
+
+export interface CleanupWorktreeCandidate {
+  repositoryId: RepositoryId;
+  worktreeId: WorktreeId | null;
+  name: string;
+  path: string;
+  reason: string;
+  sessionRecordCount: number;
+}
+
+export interface CleanupWarpConfigCandidate {
+  fileName: string;
+  ageSeconds: number;
+}
+
+export interface CleanupSessionCandidate {
+  id: AgentSessionId;
+  worktreeId: WorktreeId;
+  status: AgentSessionStatus;
+}
+
+export interface CleanupSourceError {
+  category: CleanupCategory;
+  repositoryId: RepositoryId | null;
+  error: CommandError;
+}
+
+export interface CleanupPreview {
+  prunableGitWorktrees: CleanupWorktreeCandidate[];
+  staleForestWorktrees: CleanupWorktreeCandidate[];
+  staleWarpConfigs: CleanupWarpConfigCandidate[];
+  finishedSessions: CleanupSessionCandidate[];
+  blockedForestWorktrees: CleanupWorktreeCandidate[];
+  sourceErrors: CleanupSourceError[];
+}
+
+export interface CleanupOperationResult {
+  category: CleanupCategory;
+  removed: number;
+  error: CommandError | null;
+}
+
+export interface CleanupResult {
+  operations: CleanupOperationResult[];
+  preview: CleanupPreview;
+  state: ForestState;
+}
+
 export const FALLBACK_APP_INFO: AppInfo = {
   name: "Git Forest",
-  version: "0.0.8",
+  version: "0.1.0",
   tagline: "Worktrees in reach.",
 };
 
@@ -284,16 +368,19 @@ export function sampleWorktree(overrides: Partial<Worktree> = {}): Worktree {
     locked: false,
     lockReason: null,
     prunable: false,
+    prunableReason: null,
     present: true,
     gitKnown: true,
     isPrimary: false,
     trackedChanges: 0,
     untrackedFiles: 0,
+    ignoredFiles: 0,
     ahead: null,
     behind: null,
     createdAt: "2026-08-20T09:00:00Z",
     updatedAt: "2026-08-20T09:00:00Z",
     lastUsedAt: null,
+    statusError: null,
     ...overrides,
   };
 }
@@ -309,6 +396,9 @@ export function sampleRepository(
     primaryBranch: "main",
     remoteUrl: "https://example.test/exog.git",
     lastRefreshedAt: "2026-08-20T09:00:00Z",
+    health: "available",
+    healthDetail: null,
+    lastReconciledAt: "2026-08-20T09:00:00Z",
     createdAt: "2026-08-20T09:00:00Z",
     updatedAt: "2026-08-20T09:00:00Z",
     ...overrides,

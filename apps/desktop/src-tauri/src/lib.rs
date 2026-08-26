@@ -4,10 +4,11 @@ use tauri::Manager;
 
 use commands::agents::{detect_agents, launch_agent, list_agent_sessions};
 use commands::app_info::get_app_info;
+use commands::cleanup::{preview_cleanup, run_cleanup};
 use commands::forest::{get_forest_state, update_forest_configuration};
 use commands::repositories::{
-    import_repositories, import_repository, list_repositories, refresh_repository,
-    register_repository, remove_repository,
+    import_repositories, import_repository, list_repositories, reconcile_repositories,
+    refresh_repository, register_repository, relocate_repository, remove_repository,
 };
 use commands::scan::{cancel_repository_scan, start_repository_scan};
 use commands::terminals::open_worktree;
@@ -37,7 +38,21 @@ pub struct AppState {
 }
 
 pub fn run() {
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stderr),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("git-forest.log".into()),
+                    }),
+                ])
+                .max_file_size(10 * 1024 * 1024)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+                .build(),
+        );
 
     #[cfg(desktop)]
     {
@@ -49,6 +64,7 @@ pub fn run() {
             let platform = PlatformPaths::from_app(app)?;
             let database = Database::open(&platform.database_path())?;
             let forest = ForestService::initialize(database, platform)?;
+            log::info!("Git Forest started");
             app.manage(AppState {
                 forest: Mutex::new(forest),
                 scans: ScanCoordinator::new(),
@@ -66,6 +82,8 @@ pub fn run() {
             import_repository,
             import_repositories,
             refresh_repository,
+            reconcile_repositories,
+            relocate_repository,
             remove_repository,
             start_repository_scan,
             cancel_repository_scan,
@@ -79,7 +97,9 @@ pub fn run() {
             open_worktree,
             detect_agents,
             launch_agent,
-            list_agent_sessions
+            list_agent_sessions,
+            preview_cleanup,
+            run_cleanup
         ])
         .run(tauri::generate_context!())
         .expect("error while running Git Forest");

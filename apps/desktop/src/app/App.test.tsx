@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { getForestState, updateForestConfiguration } from "../lib/forest";
+import { reconcileRepositories } from "../lib/repositories";
+import { pickDirectory } from "../lib/dialog";
 import { openWorktreeInTerminal } from "../lib/terminals";
 import { detectAgents, launchAgent, listAgentSessions } from "../lib/agents";
 import { listWorktrees, refreshWorktrees } from "../lib/worktrees";
@@ -19,7 +21,7 @@ const nativeState = {
   schemaVersion: 2,
   appInfo: {
     name: "Git Forest",
-    version: "0.0.8",
+    version: "0.1.0",
     tagline: "Worktrees in reach.",
   },
   repositories: [sampleRepository()],
@@ -35,6 +37,12 @@ vi.mock("../lib/repositories", () => ({
   importRepositories: vi.fn(),
   refreshRepository: vi.fn(),
   removeRepository: vi.fn(),
+  reconcileRepositories: vi.fn(),
+  relocateRepository: vi.fn(),
+}));
+
+vi.mock("../lib/dialog", () => ({
+  pickDirectory: vi.fn(),
 }));
 
 vi.mock("../lib/scan", () => ({
@@ -71,7 +79,11 @@ beforeEach(async () => {
   vi.mocked(scan.listenToScanProgress).mockResolvedValue(() => undefined);
   vi.mocked(scan.listenToScanComplete).mockResolvedValue(() => undefined);
   vi.mocked(listWorktrees).mockResolvedValue([]);
-  vi.mocked(refreshWorktrees).mockResolvedValue([]);
+  vi.mocked(refreshWorktrees).mockImplementation((id) => listWorktrees(id));
+  vi.mocked(reconcileRepositories).mockImplementation(async () => {
+    return await vi.mocked(getForestState)();
+  });
+  vi.mocked(pickDirectory).mockResolvedValue(null);
   vi.mocked(openWorktreeInTerminal).mockResolvedValue({
     provider: "warp",
     lastUsedAt: "2026-08-25T10:00:00Z",
@@ -123,7 +135,8 @@ describe("App", () => {
 
     // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
-    expect(screen.queryByText("v0.0.8")).not.toBeInTheDocument();
+    expect(document.querySelector("header img")).toHaveAttribute("alt", "");
+    expect(screen.queryByText("v0.1.0")).not.toBeInTheDocument();
   });
 
   it("groups worktrees under their repository with telemetry badges", async () => {
@@ -646,6 +659,87 @@ describe("App", () => {
     expect(screen.getByText("PID 4242")).toBeInTheDocument();
     expect(
       screen.getAllByText("EXOG App / feat/risk-483").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders cached repositories before reconciliation completes", async () => {
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(reconcileRepositories).mockReturnValue(
+      new Promise(() => undefined),
+    );
+
+    render(<App />);
+
+    const sidebar = await screen.findByRole("complementary", {
+      name: "Repositories",
+    });
+    expect(within(sidebar).getByText("EXOG App")).toBeInTheDocument();
+    expect(listWorktrees).not.toHaveBeenCalled();
+    expect(refreshWorktrees).not.toHaveBeenCalled();
+  });
+
+  it("waits to list worktrees until repository reconciliation finishes", async () => {
+    let resolveReconcile: (value: typeof nativeState) => void = () => {};
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(reconcileRepositories).mockReturnValue(
+      new Promise((resolve) => {
+        resolveReconcile = resolve;
+      }),
+    );
+
+    render(<App />);
+    const sidebar = await screen.findByRole("complementary", {
+      name: "Repositories",
+    });
+    expect(within(sidebar).getByText("EXOG App")).toBeInTheDocument();
+    expect(screen.queryByText("feat/risk-483")).not.toBeInTheDocument();
+
+    resolveReconcile(nativeState);
+
+    expect(await screen.findByText("feat/risk-483")).toBeInTheDocument();
+  });
+
+  it("offers Open Settings for a terminal_unavailable error", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getForestState).mockResolvedValue(nativeState);
+    vi.mocked(listWorktrees).mockResolvedValue([sampleWorktree()]);
+    vi.mocked(openWorktreeInTerminal).mockRejectedValue({
+      code: "terminal_unavailable",
+      message: "Warp is not available",
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    });
+
+    const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
+    await user.click(cockpit.getByRole("button", { name: "Open in warp" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Warp is not available");
+    await user.click(
+      within(alert).getByRole("button", { name: "Open Settings" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Forest status" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the empty cockpit copy when no repositories are indexed", async () => {
+    vi.mocked(getForestState).mockResolvedValue({
+      ...nativeState,
+      repositories: [],
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/Add or scan for repositories from the/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("No repositories indexed yet.").length,
     ).toBeGreaterThan(0);
   });
 });

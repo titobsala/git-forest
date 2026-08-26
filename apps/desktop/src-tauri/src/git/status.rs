@@ -10,6 +10,7 @@ pub struct WorktreeStatus {
     pub detached: bool,
     pub tracked_changes: u32,
     pub untracked_files: u32,
+    pub ignored_files: u32,
     pub ahead: Option<u32>,
     pub behind: Option<u32>,
 }
@@ -41,7 +42,8 @@ pub fn parse_status_v2(stdout: &[u8]) -> WorktreeStatus {
         }
         match chunk.as_bytes().first().copied() {
             Some(b'1' | b'2' | b'u') => status.tracked_changes += 1,
-            Some(b'?' | b'!') => status.untracked_files += 1,
+            Some(b'?') => status.untracked_files += 1,
+            Some(b'!') => status.ignored_files += 1,
             _ => {}
         }
     }
@@ -105,7 +107,8 @@ mod tests {
         );
         assert_eq!(status.branch.as_deref(), Some("feat/demo"));
         assert_eq!(status.tracked_changes, 1);
-        assert_eq!(status.untracked_files, 2);
+        assert_eq!(status.untracked_files, 1);
+        assert_eq!(status.ignored_files, 1);
         assert_eq!(status.ahead, Some(2));
         assert_eq!(status.behind, Some(3));
         assert!(!status.detached);
@@ -122,6 +125,7 @@ mod tests {
         let status = inspect_worktree_status(&GitRunner::new(), &repo).expect("status");
         assert_eq!(status.tracked_changes, 1);
         assert_eq!(status.untracked_files, 1);
+        assert_eq!(status.ignored_files, 0);
         assert_eq!(status.ahead, None);
         assert_eq!(status.behind, None);
     }
@@ -152,6 +156,7 @@ mod tests {
 
         let status = inspect_worktree_status(&GitRunner::new(), &repo).expect("status");
         assert_eq!(status.tracked_changes, 0);
-        assert_eq!(status.untracked_files, 1);
+        assert_eq!(status.untracked_files, 0);
+        assert_eq!(status.ignored_files, 1);
     }
 }

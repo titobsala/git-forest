@@ -116,6 +116,7 @@ impl From<Output> for GitOutput {
 
 fn map_spawn_error(error: std::io::Error) -> ForestError {
     if error.kind() == std::io::ErrorKind::NotFound {
+        log::warn!("git is not installed");
         ForestError::GitNotInstalled
     } else {
         ForestError::Io(error.to_string())
@@ -150,6 +151,10 @@ pub(crate) fn map_git_failure(args: &[&str], stderr: &str) -> ForestError {
     }
 
     let command = args.join(" ");
+    log::warn!(
+        "git command failed: {}",
+        args.first().copied().unwrap_or("git")
+    );
     if stderr.is_empty() {
         ForestError::GitCommandFailed(format!("git {command}"))
     } else {

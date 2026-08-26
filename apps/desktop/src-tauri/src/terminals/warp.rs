@@ -4,7 +4,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::agents::encode_command_line;
 use crate::domain::{
-    AgentLaunchSpec, ForestError, LaunchBehavior, TerminalLaunchResult, TerminalProviderId,
+    AgentLaunchSpec, CleanupWarpConfigCandidate, ForestError, LaunchBehavior, TerminalLaunchResult,
+    TerminalProviderId,
 };
 
 use super::launcher::{DesktopLauncher, SystemDesktopLauncher};
@@ -62,34 +63,66 @@ impl WarpProvider {
     }
 
     fn prune_tab_configs(&self) -> Result<(), ForestError> {
+        match self.prune_stale_tab_configs() {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                log::warn!("failed to prune Warp tab configs: {error}");
+                Ok(())
+            }
+        }
+    }
+
+    pub fn stale_tab_configs(&self) -> Result<Vec<CleanupWarpConfigCandidate>, ForestError> {
+        Ok(self
+            .generated_tab_configs()?
+            .into_iter()
+            .filter(|config| config.age_seconds >= self.tab_config_ttl.as_secs())
+            .collect())
+    }
+
+    pub fn prune_stale_tab_configs(&self) -> Result<u32, ForestError> {
+        let stale = self.stale_tab_configs()?;
+        let mut removed = 0_u32;
+        for config in stale {
+            let path = self.tab_config_dir.join(&config.file_name);
+            std::fs::remove_file(&path)?;
+            removed += 1;
+        }
+        Ok(removed)
+    }
+
+    fn generated_tab_configs(&self) -> Result<Vec<CleanupWarpConfigCandidate>, ForestError> {
         let entries = match std::fs::read_dir(&self.tab_config_dir) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(error) => return Err(error.into()),
         };
         let now = SystemTime::now();
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if !name.starts_with(TAB_CONFIG_PREFIX) || !name.ends_with(".toml") {
+        let mut configs = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if !file_type.is_file() {
                 continue;
             }
-            let stale = match entry
-                .metadata()
-                .ok()
-                .and_then(|metadata| metadata.modified().ok())
-            {
-                Some(modified) => now
-                    .duration_since(modified)
-                    .map(|age| age >= self.tab_config_ttl)
-                    .unwrap_or(true),
-                None => true,
-            };
-            if stale {
-                let _ = std::fs::remove_file(entry.path());
+            let name = entry.file_name();
+            let file_name = name.to_string_lossy().into_owned();
+            if !file_name.starts_with(TAB_CONFIG_PREFIX) || !file_name.ends_with(".toml") {
+                continue;
             }
+            let age_seconds = match entry.metadata().and_then(|metadata| metadata.modified()) {
+                Ok(modified) => now
+                    .duration_since(modified)
+                    .map(|age| age.as_secs())
+                    .unwrap_or(0),
+                Err(_) => self.tab_config_ttl.as_secs(),
+            };
+            configs.push(CleanupWarpConfigCandidate {
+                file_name,
+                age_seconds,
+            });
         }
-        Ok(())
+        Ok(configs)
     }
 }
 
@@ -449,6 +482,27 @@ mod tests {
             .launch_command(&spec(env.root(), "claude"), LaunchBehavior::Window)
             .expect("launch");
         assert!(launcher.opened()[0].ends_with("?new_window=true"));
+    }
+
+    #[test]
+    fn stale_tab_configs_lists_only_expired_generated_files_without_deleting() {
+        let env = crate::git::testing::TempGit::new();
+        let tabs = env.path("tabs");
+        fs::create_dir_all(&tabs).expect("tabs");
+        fs::write(tabs.join("git-forest-old.toml"), "stale\n").expect("stale");
+        fs::write(tabs.join("my-user-tab.toml"), "keep\n").expect("user");
+        let provider = WarpProvider::new_with_tab_ttl(
+            Box::new(FakeDesktopLauncher::with_scheme("warp")),
+            Duration::from_secs(30),
+            tabs.clone(),
+            Duration::ZERO,
+        );
+
+        let listed = provider.stale_tab_configs().expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].file_name, "git-forest-old.toml");
+        assert!(tabs.join("git-forest-old.toml").exists());
+        assert!(tabs.join("my-user-tab.toml").exists());
     }
 
     #[test]

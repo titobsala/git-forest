@@ -101,6 +101,10 @@
   @apply border-badge-high-ink/40 text-badge-high-ink hover:border-badge-high-ink;
 }
 
+@utility gf-button-force {
+  @apply border-badge-high-ink bg-badge-high font-semibold text-badge-high-ink hover:brightness-110;
+}
+
 /* Keyboard hint chip used in the launcher and toolbars. */
 @utility gf-keyhint {
   @apply inline-flex items-center gap-1 rounded-xs border border-card-border bg-canvas px-1 py-px font-mono text-micro text-ink-muted;
@@ -184,6 +188,14 @@
 
   .panel button.secondary {
     @apply border-card-border bg-card text-ink hover:border-brand hover:brightness-100;
+  }
+
+  .panel button.gf-button-danger {
+    @apply border-badge-high-ink/40 bg-card text-badge-high-ink hover:border-badge-high-ink hover:brightness-100;
+  }
+
+  .panel button.gf-button-force {
+    @apply border-badge-high-ink bg-badge-high font-semibold text-badge-high-ink hover:brightness-110;
   }
 
   .panel .button-row {

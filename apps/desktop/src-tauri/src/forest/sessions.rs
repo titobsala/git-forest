@@ -27,6 +27,14 @@ impl ForestService {
         let mut reconciled = Vec::new();
         for session in sessions {
             if let Some(next) = self.reconcile_one(&session, now, &claimed)? {
+                if next.status != session.status {
+                    log::info!(
+                        "session {} {} -> {}",
+                        session.id.as_str(),
+                        session.status.as_str(),
+                        next.status.as_str()
+                    );
+                }
                 if let Some(key) = session_identity_key(&next) {
                     if !claimed.contains(&key) {
                         claimed.push(key);
@@ -282,6 +290,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/live".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         inspector.add_live(identity(created.worktree.path.clone(), 4242, 99));
@@ -307,6 +316,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/dead".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         insert_running(&service, &created.worktree.id, 4242, 99);
@@ -327,6 +337,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/reuse".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         inspector.add_live(identity(created.worktree.path.clone(), 4242, 200));
@@ -348,6 +359,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/stale".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         let session = AgentSession {
@@ -378,6 +390,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/done".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         let session = AgentSession {
@@ -412,6 +425,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/perm".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         inspector.mark_inaccessible(4242);
@@ -435,6 +449,7 @@ mod tests {
                     base_ref: "main".into(),
                     branch: "feat/restart".into(),
                     name: None,
+                    copy_local_env_files: false,
                 })
                 .expect("create");
             inspector.add_live(identity(created.worktree.path.clone(), 4242, 99));
@@ -475,6 +490,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/late-pid".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -509,6 +525,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/starting-block".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -537,6 +554,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/claim-once".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 

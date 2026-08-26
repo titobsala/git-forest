@@ -17,11 +17,16 @@ use crate::processes::{default_process_inspector, ProcessInspector};
 use crate::terminals::WarpProvider;
 
 mod agents;
+mod cleanup;
 mod naming;
 mod repositories;
 mod sessions;
 mod terminals;
+mod worktree_seeds;
 mod worktrees;
+
+#[cfg(test)]
+mod worktrees_tests;
 
 const DEFAULT_PID_POLL_ATTEMPTS: u32 = 5;
 const DEFAULT_PID_POLL_INTERVAL: Duration = Duration::from_millis(200);
@@ -69,7 +74,8 @@ impl ForestService {
         pid_poll_attempts: u32,
         pid_poll_interval: Duration,
     ) -> Result<Self, ForestError> {
-        db.migrate()?;
+        let schema_version = db.migrate()?;
+        log::info!("database migrated to schema version {schema_version}");
         let service = Self {
             db,
             platform,
@@ -460,7 +466,7 @@ pub(crate) mod tests {
 
         let reopened = open_service(&env);
         let state = reopened.state().expect("reopen");
-        assert_eq!(state.schema_version, 4);
+        assert_eq!(state.schema_version, 5);
         assert_eq!(state.repositories.len(), 1);
         assert_eq!(state.repositories[0].name, "Keep Me");
         assert_eq!(state.configuration.default_agent_id.as_str(), "codex");

@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { errorMessage } from "./errors";
+import { errorMessage, toCommandError } from "./errors";
+
+describe("toCommandError", () => {
+  it("preserves a command error payload", () => {
+    expect(
+      toCommandError({
+        code: "duplicate_path",
+        message: "already registered",
+      }),
+    ).toEqual({
+      code: "duplicate_path",
+      message: "already registered",
+    });
+  });
+
+  it("falls back for unknown values", () => {
+    expect(toCommandError(undefined)).toEqual({
+      code: "unknown_error",
+      message: "Something went wrong.",
+    });
+  });
+
+  it("keeps a string message under unknown_error", () => {
+    expect(toCommandError("disk is full")).toEqual({
+      code: "unknown_error",
+      message: "disk is full",
+    });
+  });
+});
 
 describe("errorMessage", () => {
   it("reads a command error payload", () => {

@@ -62,6 +62,7 @@ impl ForestService {
                 .terminals
                 .launch_command(&spec, configuration.launch_behavior),
         } {
+            log::warn!("agent launch failed for session {}", session.id.as_str());
             session.status = AgentSessionStatus::Failed;
             session.exited_at = Some(Utc::now());
             update_agent_session(self.db.connection(), &session)?;
@@ -75,6 +76,11 @@ impl ForestService {
             session.process_start_ticks = i64::try_from(identity.start_ticks).ok();
             session.last_seen_at = Some(Utc::now());
         }
+        log::info!(
+            "session {} {}",
+            session.id.as_str(),
+            session.status.as_str()
+        );
         update_agent_session(self.db.connection(), &session)?;
 
         Ok(AgentLaunchResult {
@@ -146,6 +152,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -172,6 +179,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent-recent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         let before = chrono::Utc::now();
@@ -201,6 +209,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agent-no-use".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -229,6 +238,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/agents".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -255,6 +265,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/missing-agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -284,6 +295,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/gone-agent".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         std::fs::remove_dir_all(&created.worktree.path).expect("remove");
@@ -312,6 +324,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/starting-pid".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -364,6 +377,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/pid".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
         inspector.appear_after_baseline(crate::processes::ProcessIdentity {
@@ -399,6 +413,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/failed-dispatch".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 
@@ -427,6 +442,7 @@ mod tests {
                 base_ref: "main".into(),
                 branch: "feat/many".into(),
                 name: None,
+                copy_local_env_files: false,
             })
             .expect("create");
 

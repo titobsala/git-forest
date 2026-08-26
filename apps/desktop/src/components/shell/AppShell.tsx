@@ -18,7 +18,7 @@ interface AppShellProps {
   sidebar: ReactNode;
   inspector: ReactNode;
   /** Application-level error banner, rendered above the workspace. */
-  error: string | null;
+  error: ReactNode;
   children: ReactNode;
   /** Overlays (quick launch, dialogs) rendered above the whole stage. */
   overlays?: ReactNode;
@@ -41,12 +41,12 @@ export function AppShell({
         {sidebar}
         <main className="flex min-w-0 flex-1 flex-col">
           {error ? (
-            <p
+            <div
               role="alert"
-              className="border-b border-badge-high-ink/30 bg-badge-high px-3 py-1.5 text-body text-badge-high-ink"
+              className="flex flex-wrap items-center border-b border-badge-high-ink/30 bg-badge-high px-3 py-1.5 text-body text-badge-high-ink"
             >
               {error}
-            </p>
+            </div>
           ) : null}
           {children}
         </main>
