@@ -120,8 +120,8 @@ pub fn resolve_commit(
 }
 
 fn list_remote_branches(git: &GitRunner, repo: &Path) -> Result<Vec<RemoteBranch>, ForestError> {
-    let remotes = list_configured_remotes(git, repo)?;
-    if remotes.is_empty() {
+    let remotes = list_remote_fetch_configs(git, repo)?;
+    if remotes.iter().all(|remote| remote.positive.is_empty()) {
         return Ok(Vec::new());
     }
 
@@ -180,17 +180,127 @@ fn list_configured_remotes(git: &GitRunner, repo: &Path) -> Result<Vec<String>, 
         .collect())
 }
 
-fn classify_remote_ref(reference: &str, remotes: &[String]) -> Option<(String, String)> {
-    let rest = reference.strip_prefix("refs/remotes/")?;
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RemoteFetchConfig {
+    remote: String,
+    positive: Vec<FetchMapping>,
+    negative: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FetchMapping {
+    source: String,
+    destination: String,
+}
+
+fn list_remote_fetch_configs(
+    git: &GitRunner,
+    repo: &Path,
+) -> Result<Vec<RemoteFetchConfig>, ForestError> {
+    list_configured_remotes(git, repo)?
+        .into_iter()
+        .map(|remote| {
+            let key = format!("remote.{remote}.fetch");
+            let args = ["config", "--null", "--get-all", key.as_str()];
+            let output = git.run(repo, &args)?;
+            if !output.success && !output.stderr.trim().is_empty() {
+                output.ensure_success(&args)?;
+            }
+
+            let mut positive = Vec::new();
+            let mut negative = Vec::new();
+            if output.success {
+                for raw in output.stdout.split(|byte| *byte == 0) {
+                    let value = String::from_utf8_lossy(raw);
+                    let value = value.trim();
+                    if value.is_empty() {
+                        continue;
+                    }
+                    if let Some(excluded) = value.strip_prefix('^') {
+                        negative.push(excluded.to_owned());
+                    } else if let Some(mapping) = parse_fetch_mapping(value) {
+                        positive.push(mapping);
+                    }
+                }
+            }
+
+            Ok(RemoteFetchConfig {
+                remote,
+                positive,
+                negative,
+            })
+        })
+        .collect()
+}
+
+fn parse_fetch_mapping(value: &str) -> Option<FetchMapping> {
+    let value = value.strip_prefix('+').unwrap_or(value);
+    let (source, destination) = value.split_once(':')?;
+    if source.is_empty() || destination.is_empty() {
+        return None;
+    }
+    Some(FetchMapping {
+        source: source.to_owned(),
+        destination: destination.to_owned(),
+    })
+}
+
+fn classify_remote_ref(reference: &str, remotes: &[RemoteFetchConfig]) -> Option<(String, String)> {
     remotes
         .iter()
-        .filter_map(|remote| {
-            rest.strip_prefix(remote.as_str())
-                .and_then(|tail| tail.strip_prefix('/'))
-                .filter(|name| !name.is_empty() && *name != "HEAD")
-                .map(|name| (remote.clone(), name.to_owned()))
+        .flat_map(|remote| {
+            remote.positive.iter().filter_map(move |mapping| {
+                let source = mapping.source_for_destination(reference)?;
+                let name = source.strip_prefix("refs/heads/")?;
+                if name.is_empty()
+                    || remote
+                        .negative
+                        .iter()
+                        .any(|excluded| wildcard_capture(excluded, &source).is_some())
+                {
+                    return None;
+                }
+                Some((
+                    mapping.destination.replace('*', "").len(),
+                    remote.remote.clone(),
+                    name.to_owned(),
+                ))
+            })
         })
-        .max_by_key(|(remote, _)| remote.len())
+        .max_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| right.1.cmp(&left.1))
+                .then_with(|| right.2.cmp(&left.2))
+        })
+        .map(|(_, remote, name)| (remote, name))
+}
+
+impl FetchMapping {
+    fn source_for_destination(&self, reference: &str) -> Option<String> {
+        let capture = wildcard_capture(&self.destination, reference)?;
+        substitute_wildcard(&self.source, capture)
+    }
+}
+
+fn wildcard_capture<'a>(pattern: &str, value: &'a str) -> Option<&'a str> {
+    let Some((prefix, suffix)) = pattern.split_once('*') else {
+        return (pattern == value).then_some("");
+    };
+    if suffix.contains('*') {
+        return None;
+    }
+    value.strip_prefix(prefix)?.strip_suffix(suffix)
+}
+
+fn substitute_wildcard(pattern: &str, capture: &str) -> Option<String> {
+    let Some((prefix, suffix)) = pattern.split_once('*') else {
+        return capture.is_empty().then(|| pattern.to_owned());
+    };
+    if suffix.contains('*') {
+        return None;
+    }
+    Some(format!("{prefix}{capture}{suffix}"))
 }
 
 #[cfg(test)]
@@ -274,6 +384,40 @@ mod tests {
         assert!(!catalog.remote_branches.iter().any(|branch| {
             branch.reference == "refs/remotes/origin/HEAD" || branch.name == "HEAD"
         }));
+    }
+
+    #[test]
+    fn omits_cached_refs_outside_the_remote_fetch_mapping() {
+        let env = TempGit::new();
+        let (repo, origin) = seeded_repo_with_origin(&env);
+        run_git(&origin, &["branch", "feat/stale"]);
+        run_git(&repo, &["fetch", "origin"]);
+        run_git(&repo, &["config", "--unset-all", "remote.origin.fetch"]);
+        run_git(
+            &repo,
+            &[
+                "config",
+                "--add",
+                "remote.origin.fetch",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ],
+        );
+
+        let catalog = list_branch_catalog(&GitRunner::new(), &repo).expect("catalog");
+        assert!(catalog
+            .remote_branches
+            .iter()
+            .any(|branch| branch.reference == "refs/remotes/origin/main"));
+        assert!(!catalog
+            .remote_branches
+            .iter()
+            .any(|branch| branch.reference == "refs/remotes/origin/feat/stale"));
+        assert!(!is_remote_tracking_base(
+            &GitRunner::new(),
+            &repo,
+            "refs/remotes/origin/feat/stale"
+        )
+        .expect("tracking classification"));
     }
 
     #[test]

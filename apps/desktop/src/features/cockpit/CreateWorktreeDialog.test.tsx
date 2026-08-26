@@ -593,6 +593,48 @@ describe("CreateWorktreeDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("requires an explicit base selection when fetch prunes the selected remote", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/deleted",
+          reference: "refs/remotes/origin/feat/deleted",
+        },
+      ],
+    });
+    fetchMock.mockResolvedValueOnce({
+      localBranches: [{ name: "main" }],
+      remoteBranches: [],
+    });
+    renderDialog();
+
+    const base = await screen.findByLabelText("Base ref");
+    const branchInput = screen.getByLabelText("New branch");
+    await user.selectOptions(base, "refs/remotes/origin/feat/deleted");
+    expect(branchInput).toHaveValue("feat/deleted");
+
+    await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The selected base is no longer available",
+    );
+    expect(base).toHaveValue("");
+    expect(base).toHaveFocus();
+    expect(branchInput).toBeDisabled();
+    expect(branchInput).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: "Create worktree" }),
+    ).toBeDisabled();
+    expect(createMock).not.toHaveBeenCalled();
+
+    await user.selectOptions(base, "main");
+    expect(branchInput).toBeEnabled();
+    expect(branchInput).toHaveValue("");
+  });
+
   it("keeps cached options when fetch fails", async () => {
     const user = userEvent.setup();
     fetchMock.mockRejectedValueOnce({

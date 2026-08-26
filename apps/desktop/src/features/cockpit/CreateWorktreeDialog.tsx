@@ -93,6 +93,7 @@ export function CreateWorktreeDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [baseSelectionRequired, setBaseSelectionRequired] = useState(false);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(
     null,
@@ -101,6 +102,7 @@ export function CreateWorktreeDialog({
   const [createdOutcome, setCreatedOutcome] = useState<CreatedOutcome | null>(
     null,
   );
+  const baseRefSelect = useRef<HTMLSelectElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
@@ -129,6 +131,7 @@ export function CreateWorktreeDialog({
 
   function handleBaseRefChange(nextBase: string) {
     setBaseRef(nextBase);
+    setBaseSelectionRequired(false);
     suggestBranchFromBase(catalog, nextBase);
   }
 
@@ -140,10 +143,17 @@ export function CreateWorktreeDialog({
     setFetching(true);
     try {
       const next = await fetchBranchCatalog(repository.id);
-      const nextBase = defaultBaseRef(next, baseRef);
       setCatalog(next);
-      setBaseRef(nextBase);
-      suggestBranchFromBase(next, nextBase);
+      if (!catalogContains(next, baseRef)) {
+        setBaseRef("");
+        setBaseSelectionRequired(true);
+        if (!branchTouched.current) {
+          setBranch("");
+        }
+      } else {
+        setBaseSelectionRequired(false);
+        suggestBranchFromBase(next, baseRef);
+      }
     } catch (caught: unknown) {
       setError(toCommandError(caught).message);
     } finally {
@@ -170,6 +180,7 @@ export function CreateWorktreeDialog({
         }
         setCatalog(next);
         setBaseRef(defaultBaseRef(next, "main"));
+        setBaseSelectionRequired(false);
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
@@ -203,6 +214,12 @@ export function CreateWorktreeDialog({
       cancelled = true;
     };
   }, [defaultAgentId]);
+
+  useEffect(() => {
+    if (baseSelectionRequired) {
+      baseRefSelect.current?.focus();
+    }
+  }, [baseSelectionRequired]);
 
   useEffect(() => {
     if (launchFailed) {
@@ -303,7 +320,7 @@ export function CreateWorktreeDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (creationLocked || fetching) {
+    if (creationLocked || fetching || baseSelectionRequired || !baseRef) {
       return;
     }
     setError(null);
@@ -400,11 +417,17 @@ export function CreateWorktreeDialog({
             <span id="base-ref-label">Base ref</span>
             <div className="field-row">
               <select
+                ref={baseRefSelect}
                 aria-labelledby="base-ref-label"
                 value={baseRef}
                 onChange={(event) => handleBaseRefChange(event.target.value)}
                 disabled={catalogBusy}
               >
+                {baseSelectionRequired ? (
+                  <option value="" disabled>
+                    Select a base branch
+                  </option>
+                ) : null}
                 <optgroup label="Local branches">
                   {catalog.localBranches.map((item) => (
                     <option key={`local:${item.name}`} value={item.name}>
@@ -433,6 +456,12 @@ export function CreateWorktreeDialog({
                 {fetching ? "Fetching…" : "Fetch remotes"}
               </button>
             </div>
+            {baseSelectionRequired ? (
+              <p className="hint" role="alert">
+                The selected base is no longer available after fetching. Choose
+                a base branch before continuing.
+              </p>
+            ) : null}
           </div>
 
           <label className="field">
@@ -446,7 +475,7 @@ export function CreateWorktreeDialog({
               }}
               autoComplete="off"
               spellCheck={false}
-              disabled={creationLocked}
+              disabled={creationLocked || baseSelectionRequired}
             />
           </label>
 
@@ -556,7 +585,13 @@ export function CreateWorktreeDialog({
               </button>
               <button
                 type="submit"
-                disabled={busy || fetching || branch.trim() === ""}
+                disabled={
+                  busy ||
+                  fetching ||
+                  baseSelectionRequired ||
+                  baseRef === "" ||
+                  branch.trim() === ""
+                }
               >
                 Create worktree
               </button>

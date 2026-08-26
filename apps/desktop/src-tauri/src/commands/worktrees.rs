@@ -5,7 +5,7 @@ use crate::domain::{
     CommandError, CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult,
     RemoveWorktreeResult, RepositoryId, Worktree, WorktreeId, WorktreeRemovalPreview,
 };
-use crate::git::BranchCatalog;
+use crate::git::{BranchCatalog, GitRunner};
 use crate::AppState;
 
 #[tauri::command]
@@ -37,7 +37,14 @@ pub fn fetch_branch_catalog(
     state: State<'_, AppState>,
     repository_id: RepositoryId,
 ) -> Result<BranchCatalog, CommandError> {
-    with_forest(&state, |forest| forest.fetch_branch_catalog(repository_id))
+    // Copy the repository path while holding Forest's shared mutex, then
+    // release it before the potentially slow network fetch. Other commands
+    // must remain responsive while a remote is slow or unreachable.
+    let repository_path = with_forest(&state, |forest| {
+        forest.branch_catalog_repository_path(repository_id)
+    })?;
+    crate::git::refs::fetch_branch_catalog(&GitRunner::new(), &repository_path)
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]

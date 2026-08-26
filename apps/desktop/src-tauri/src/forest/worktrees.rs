@@ -45,6 +45,13 @@ impl ForestService {
         crate::git::refs::list_branch_catalog(&self.git, &repository.path)
     }
 
+    pub(crate) fn branch_catalog_repository_path(
+        &self,
+        repository_id: RepositoryId,
+    ) -> Result<PathBuf, ForestError> {
+        Ok(self.require_repository(&repository_id)?.path)
+    }
+
     pub fn fetch_branch_catalog(
         &self,
         repository_id: RepositoryId,
