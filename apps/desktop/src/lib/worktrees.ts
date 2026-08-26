@@ -1,9 +1,9 @@
 import { invokeCommand } from "./tauri";
 import type {
+  BranchCatalog,
   CreateWorktreeInput,
   CreateWorktreePreview,
   CreateWorktreeResult,
-  LocalBranch,
   RemoveWorktreeResult,
   RepositoryId,
   Worktree,
@@ -23,10 +23,16 @@ export async function refreshWorktrees(
   return invokeCommand<Worktree[]>("refresh_worktrees", { repositoryId });
 }
 
-export async function listLocalBranches(
+export async function listBranchCatalog(
   repositoryId: RepositoryId,
-): Promise<LocalBranch[]> {
-  return invokeCommand<LocalBranch[]>("list_local_branches", { repositoryId });
+): Promise<BranchCatalog> {
+  return invokeCommand<BranchCatalog>("list_branch_catalog", { repositoryId });
+}
+
+export async function fetchBranchCatalog(
+  repositoryId: RepositoryId,
+): Promise<BranchCatalog> {
+  return invokeCommand<BranchCatalog>("fetch_branch_catalog", { repositoryId });
 }
 
 export async function previewCreateWorktree(

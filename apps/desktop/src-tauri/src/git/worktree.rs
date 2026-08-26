@@ -22,6 +22,7 @@ pub struct WorktreeAddRequest<'a> {
     pub path: &'a Path,
     pub branch: &'a str,
     pub base: &'a str,
+    pub track: bool,
 }
 
 pub fn list_worktrees(git: &GitRunner, repo: &Path) -> Result<Vec<GitWorktree>, ForestError> {
@@ -105,10 +106,12 @@ pub fn add_worktree(
         .path
         .to_str()
         .ok_or(ForestError::WorktreePathUnavailable)?;
-    git.run_success(
-        repo,
-        &["worktree", "add", "-b", request.branch, path, request.base],
-    )?;
+    let mut args = vec!["worktree", "add"];
+    if request.track {
+        args.push("--track");
+    }
+    args.extend_from_slice(&["-b", request.branch, path, request.base]);
+    git.run_success(repo, &args)?;
     Ok(())
 }
 
@@ -170,9 +173,9 @@ mod tests {
     };
     use crate::domain::ForestError;
     use crate::git::runner::GitRunner;
-    use crate::git::testing::TempGit;
+    use crate::git::testing::{run_git, TempGit};
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn parses_nul_separated_worktree_records_with_spaces() {
@@ -201,6 +204,7 @@ mod tests {
                 path: &extra,
                 branch: "feat/spaces",
                 base: "main",
+                track: false,
             },
         )
         .expect("add");
@@ -282,6 +286,102 @@ mod tests {
         assert!(!remaining.iter().any(|item| item.path == extra));
         assert!(repo.is_dir());
         assert!(!present.exists());
+    }
+
+    #[test]
+    fn remote_tracking_base_creates_a_branch_with_upstream() {
+        let env = TempGit::new();
+        let repo = repo_with_remote_feature(&env);
+        let extra = env.path("from-remote");
+        add_worktree(
+            &GitRunner::new(),
+            &repo,
+            WorktreeAddRequest {
+                path: &extra,
+                branch: "feat/example",
+                base: "refs/remotes/origin/feat/example",
+                track: true,
+            },
+        )
+        .expect("add tracked");
+
+        assert_eq!(
+            upstream_of(&repo, "feat/example").as_deref(),
+            Some("origin/feat/example")
+        );
+        assert!(extra.join(".git").is_file());
+    }
+
+    #[test]
+    fn local_base_does_not_configure_upstream() {
+        let env = TempGit::new();
+        let repo = env.init_repo("app");
+        env.commit_file(&repo, "README.md", "hello\n", "initial");
+        let extra = env.path("from-local");
+        add_worktree(
+            &GitRunner::new(),
+            &repo,
+            WorktreeAddRequest {
+                path: &extra,
+                branch: "feat/local",
+                base: "main",
+                track: false,
+            },
+        )
+        .expect("add local");
+        assert!(upstream_of(&repo, "feat/local").is_none());
+    }
+
+    #[test]
+    fn commit_ish_that_resembles_a_remote_name_does_not_enable_tracking() {
+        let env = TempGit::new();
+        let repo = repo_with_remote_feature(&env);
+        let sha = crate::git::refs::resolve_commit(
+            &GitRunner::new(),
+            &repo,
+            "refs/remotes/origin/feat/example",
+        )
+        .expect("sha");
+        let extra = env.path("from-sha");
+        add_worktree(
+            &GitRunner::new(),
+            &repo,
+            WorktreeAddRequest {
+                path: &extra,
+                branch: "feat/from-sha",
+                base: &sha,
+                track: false,
+            },
+        )
+        .expect("add from sha");
+        assert!(upstream_of(&repo, "feat/from-sha").is_none());
+    }
+
+    fn repo_with_remote_feature(env: &TempGit) -> PathBuf {
+        let origin = env.init_repo("origin");
+        env.commit_file(&origin, "README.md", "hello\n", "initial");
+        run_git(&origin, &["branch", "feat/example"]);
+        let repo = env.init_repo("app");
+        env.commit_file(&repo, "README.md", "hello\n", "initial");
+        env.add_remote(&repo, origin.to_str().expect("utf-8 origin"));
+        run_git(&repo, &["fetch", "origin"]);
+        repo
+    }
+
+    fn upstream_of(repo: &Path, branch: &str) -> Option<String> {
+        let output = crate::git::testing::isolated_git(repo)
+            .args([
+                "rev-parse",
+                "--abbrev-ref",
+                &format!("{branch}@{{upstream}}"),
+            ])
+            .output()
+            .expect("upstream");
+        if output.status.success() {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        } else {
+            None
+        }
     }
 
     fn run_git_branches(repo: &std::path::Path) -> String {

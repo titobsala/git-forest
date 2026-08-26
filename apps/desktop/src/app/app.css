@@ -198,6 +198,18 @@
     @apply border-badge-high-ink bg-badge-high font-semibold text-badge-high-ink hover:brightness-110;
   }
 
+  .panel .field-row {
+    @apply flex items-stretch gap-1.5;
+  }
+
+  .panel .field-row select {
+    @apply w-auto min-w-0 flex-1;
+  }
+
+  .panel .field-row button {
+    @apply shrink-0;
+  }
+
   .panel .button-row {
     @apply flex flex-wrap items-center gap-1.5;
   }

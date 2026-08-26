@@ -835,3 +835,191 @@ fn untracked_files_still_require_force_removal() {
     assert_eq!(preview.worktree.untracked_files, 1);
     assert_eq!(preview.worktree.ignored_files, 0);
 }
+
+fn push_remote_feature(env: &TempEnv, repo: &std::path::Path, branch: &str) {
+    let origin = env.root.join("origin.git");
+    run_git(
+        &env.root,
+        &[
+            "clone",
+            "--bare",
+            repo.to_str().expect("utf-8 repo"),
+            origin.to_str().expect("utf-8 origin"),
+        ],
+    );
+    run_git(
+        repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            origin.to_str().expect("utf-8 origin"),
+        ],
+    );
+    run_git(repo, &["fetch", "origin"]);
+    let pusher = env.root.join("pusher");
+    run_git(
+        &env.root,
+        &[
+            "clone",
+            origin.to_str().expect("utf-8 origin"),
+            pusher.to_str().expect("utf-8 pusher"),
+        ],
+    );
+    run_git(&pusher, &["checkout", "-b", branch]);
+    fs::write(pusher.join("feature.txt"), "from remote\n").expect("feature file");
+    run_git(&pusher, &["add", "feature.txt"]);
+    run_git(&pusher, &["commit", "-m", "remote feature"]);
+    run_git(&pusher, &["push", "-u", "origin", branch]);
+}
+
+fn upstream_of(repo: &std::path::Path, branch: &str) -> Option<String> {
+    let output = crate::git::testing::isolated_git(repo)
+        .args([
+            "rev-parse",
+            "--abbrev-ref",
+            &format!("{branch}@{{upstream}}"),
+        ])
+        .output()
+        .expect("upstream");
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    } else {
+        None
+    }
+}
+
+#[test]
+fn creating_from_a_remote_ref_configures_upstream_tracking() {
+    let env = TempEnv::new();
+    let (service, repository) = imported_repo(&env);
+    push_remote_feature(&env, &repository.path, "feat/example");
+    service
+        .fetch_branch_catalog(repository.id.clone())
+        .expect("fetch");
+
+    let created = service
+        .create_worktree(CreateWorktreeInput {
+            repository_id: repository.id.clone(),
+            base_ref: "refs/remotes/origin/feat/example".into(),
+            branch: "feat/example".into(),
+            name: None,
+            copy_local_env_files: false,
+        })
+        .expect("create from remote");
+
+    assert_eq!(created.worktree.branch.as_deref(), Some("feat/example"));
+    assert_eq!(
+        upstream_of(&repository.path, "feat/example").as_deref(),
+        Some("origin/feat/example")
+    );
+}
+
+#[test]
+fn creating_from_a_local_base_does_not_configure_upstream() {
+    let env = TempEnv::new();
+    let (service, repository) = imported_repo(&env);
+    let created = service
+        .create_worktree(CreateWorktreeInput {
+            repository_id: repository.id.clone(),
+            base_ref: "main".into(),
+            branch: "feat/local".into(),
+            name: None,
+            copy_local_env_files: false,
+        })
+        .expect("create from local");
+    assert_eq!(created.worktree.branch.as_deref(), Some("feat/local"));
+    assert!(upstream_of(&repository.path, "feat/local").is_none());
+}
+
+#[test]
+fn arbitrary_commit_ish_does_not_enable_tracking() {
+    let env = TempEnv::new();
+    let (service, repository) = imported_repo(&env);
+    push_remote_feature(&env, &repository.path, "feat/example");
+    service
+        .fetch_branch_catalog(repository.id.clone())
+        .expect("fetch");
+    let sha = crate::git::refs::resolve_commit(
+        &crate::git::GitRunner::new(),
+        &repository.path,
+        "refs/remotes/origin/feat/example",
+    )
+    .expect("sha");
+
+    service
+        .create_worktree(CreateWorktreeInput {
+            repository_id: repository.id.clone(),
+            base_ref: sha,
+            branch: "feat/from-sha".into(),
+            name: None,
+            copy_local_env_files: false,
+        })
+        .expect("create from sha");
+    assert!(upstream_of(&repository.path, "feat/from-sha").is_none());
+}
+
+#[test]
+fn fetch_and_remote_create_leave_dirty_primary_checkout_unchanged() {
+    let env = TempEnv::new();
+    let (service, repository) = imported_repo(&env);
+    fs::write(repository.path.join("tracked.txt"), "clean\n").expect("tracked");
+    run_git(&repository.path, &["add", "tracked.txt"]);
+    run_git(&repository.path, &["commit", "-m", "add tracked"]);
+    push_remote_feature(&env, &repository.path, "feat/example");
+    fs::write(repository.path.join("tracked.txt"), "dirty-bytes\n").expect("dirty");
+    fs::write(repository.path.join("untracked.txt"), "untracked-bytes\n").expect("untracked");
+    let dirty = fs::read(repository.path.join("tracked.txt")).expect("read dirty");
+    let untracked = fs::read(repository.path.join("untracked.txt")).expect("read untracked");
+
+    service
+        .fetch_branch_catalog(repository.id.clone())
+        .expect("fetch");
+    service
+        .create_worktree(CreateWorktreeInput {
+            repository_id: repository.id.clone(),
+            base_ref: "refs/remotes/origin/feat/example".into(),
+            branch: "feat/example".into(),
+            name: None,
+            copy_local_env_files: false,
+        })
+        .expect("create");
+
+    assert_eq!(
+        fs::read(repository.path.join("tracked.txt")).expect("dirty after"),
+        dirty
+    );
+    assert_eq!(
+        fs::read(repository.path.join("untracked.txt")).expect("untracked after"),
+        untracked
+    );
+}
+
+#[test]
+fn failed_fetch_returns_a_structured_error_and_does_not_create_a_worktree() {
+    let env = TempEnv::new();
+    let (service, repository) = imported_repo(&env);
+    let missing = env.root.join("missing.git");
+    run_git(
+        &repository.path,
+        &[
+            "remote",
+            "add",
+            "origin",
+            missing.to_str().expect("utf-8 missing"),
+        ],
+    );
+    let before = service
+        .list_worktrees(repository.id.clone())
+        .expect("before");
+    let error = service
+        .fetch_branch_catalog(repository.id.clone())
+        .expect_err("fetch");
+    assert!(matches!(error, ForestError::GitCommandFailed(_)));
+    let after = service
+        .list_worktrees(repository.id.clone())
+        .expect("after");
+    assert_eq!(before.len(), after.len());
+    assert_eq!(after.len(), 1);
+    assert!(after[0].is_primary);
+}

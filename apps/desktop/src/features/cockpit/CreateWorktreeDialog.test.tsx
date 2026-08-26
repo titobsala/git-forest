@@ -10,14 +10,16 @@ import {
 } from "../../types/forest";
 import {
   createWorktree,
-  listLocalBranches,
+  fetchBranchCatalog,
+  listBranchCatalog,
   previewCreateWorktree,
 } from "../../lib/worktrees";
 import { detectAgents, launchAgent } from "../../lib/agents";
 
 vi.mock("../../lib/worktrees", () => ({
   createWorktree: vi.fn(),
-  listLocalBranches: vi.fn(),
+  fetchBranchCatalog: vi.fn(),
+  listBranchCatalog: vi.fn(),
   previewCreateWorktree: vi.fn(),
 }));
 
@@ -26,7 +28,8 @@ vi.mock("../../lib/agents", () => ({
   launchAgent: vi.fn(),
 }));
 
-const listMock = vi.mocked(listLocalBranches);
+const listMock = vi.mocked(listBranchCatalog);
+const fetchMock = vi.mocked(fetchBranchCatalog);
 const previewMock = vi.mocked(previewCreateWorktree);
 const createMock = vi.mocked(createWorktree);
 const detectMock = vi.mocked(detectAgents);
@@ -62,7 +65,25 @@ function renderDialog(
 describe("CreateWorktreeDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    listMock.mockResolvedValue([{ name: "main" }, { name: "develop" }]);
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }, { name: "develop" }],
+      remoteBranches: [],
+    });
+    fetchMock.mockResolvedValue({
+      localBranches: [{ name: "main" }, { name: "develop" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+        {
+          remote: "origin",
+          name: "main",
+          reference: "refs/remotes/origin/main",
+        },
+      ],
+    });
     previewMock.mockResolvedValue({
       destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
       repositorySlug: "exog-app-repo-1",
@@ -285,6 +306,7 @@ describe("CreateWorktreeDialog", () => {
     await user.click(checkbox);
     expect(checkbox).not.toBeChecked();
     expect(previewMock).toHaveBeenCalledTimes(previewCalls);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("defaults the environment copy checkbox on and sends true", async () => {
@@ -519,5 +541,182 @@ describe("CreateWorktreeDialog", () => {
     expect(launchMock).toHaveBeenLastCalledWith("wt-1", "codex");
     expect(onAgentLaunched).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("loads the cached catalog on open without fetching remotes", async () => {
+    renderDialog();
+    expect(
+      await screen.findByRole("option", { name: "main" }),
+    ).toBeInTheDocument();
+    expect(listMock).toHaveBeenCalledWith("repo-1");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("renders local and remote optgroups", async () => {
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }, { name: "develop" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+      ],
+    });
+    renderDialog();
+    expect(
+      await screen.findByRole("group", { name: "Local branches" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Remote branches" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "main" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "origin/feat/example" }),
+    ).toHaveValue("refs/remotes/origin/feat/example");
+  });
+
+  it("fetches remotes and replaces the catalog options", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await screen.findByRole("option", { name: "main" });
+    expect(
+      screen.queryByRole("option", { name: "origin/feat/example" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("repo-1");
+    expect(
+      await screen.findByRole("option", { name: "origin/feat/example" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps cached options when fetch fails", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValueOnce({
+      code: "git_command_failed",
+      message: "could not fetch remotes",
+    });
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }, { name: "develop" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/cached",
+          reference: "refs/remotes/origin/feat/cached",
+        },
+      ],
+    });
+    const { onClose } = renderDialog();
+    expect(
+      await screen.findByRole("option", { name: "origin/feat/cached" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "could not fetch remotes",
+    );
+    expect(
+      screen.getByRole("option", { name: "origin/feat/cached" }),
+    ).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("submits the full remote ref to preview and create", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+      ],
+    });
+    createMock.mockResolvedValueOnce({
+      worktree: created,
+      worktrees: [created],
+      localEnvCopy: { copied: [], failures: [] },
+    });
+    renderDialog();
+    const base = await screen.findByLabelText("Base ref");
+    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    await user.selectOptions(screen.getByLabelText("After creation"), "");
+    await user.click(screen.getByRole("button", { name: "Create worktree" }));
+
+    expect(previewMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseRef: "refs/remotes/origin/feat/example",
+        branch: "feat/example",
+      }),
+    );
+    expect(createMock).toHaveBeenCalledWith({
+      repositoryId: "repo-1",
+      baseRef: "refs/remotes/origin/feat/example",
+      branch: "feat/example",
+      name: undefined,
+      copyLocalEnvFiles: false,
+    });
+  });
+
+  it("suggests the remote short name until the branch field is edited", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+        {
+          remote: "origin",
+          name: "feat/other",
+          reference: "refs/remotes/origin/feat/other",
+        },
+      ],
+    });
+    renderDialog();
+    const base = await screen.findByLabelText("Base ref");
+    const branchInput = screen.getByLabelText("New branch");
+    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    expect(branchInput).toHaveValue("feat/example");
+    await user.selectOptions(base, "refs/remotes/origin/feat/other");
+    expect(branchInput).toHaveValue("feat/other");
+  });
+
+  it("keeps a user-edited branch name across base changes and fetches", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+        {
+          remote: "origin",
+          name: "feat/other",
+          reference: "refs/remotes/origin/feat/other",
+        },
+      ],
+    });
+    renderDialog();
+    const base = await screen.findByLabelText("Base ref");
+    const branchInput = screen.getByLabelText("New branch");
+    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    expect(branchInput).toHaveValue("feat/example");
+    await user.clear(branchInput);
+    await user.type(branchInput, "custom/name");
+    await user.selectOptions(base, "refs/remotes/origin/feat/other");
+    expect(branchInput).toHaveValue("custom/name");
+    await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
+    await screen.findByRole("option", { name: "origin/feat/example" });
+    expect(branchInput).toHaveValue("custom/name");
   });
 });

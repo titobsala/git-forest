@@ -5,7 +5,7 @@ use crate::domain::{
     CommandError, CreateWorktreeInput, CreateWorktreePreview, CreateWorktreeResult,
     RemoveWorktreeResult, RepositoryId, Worktree, WorktreeId, WorktreeRemovalPreview,
 };
-use crate::git::LocalBranch;
+use crate::git::BranchCatalog;
 use crate::AppState;
 
 #[tauri::command]
@@ -25,11 +25,19 @@ pub fn refresh_worktrees(
 }
 
 #[tauri::command]
-pub fn list_local_branches(
+pub fn list_branch_catalog(
     state: State<'_, AppState>,
     repository_id: RepositoryId,
-) -> Result<Vec<LocalBranch>, CommandError> {
-    with_forest(&state, |forest| forest.list_local_branches(repository_id))
+) -> Result<BranchCatalog, CommandError> {
+    with_forest(&state, |forest| forest.list_branch_catalog(repository_id))
+}
+
+#[tauri::command]
+pub fn fetch_branch_catalog(
+    state: State<'_, AppState>,
+    repository_id: RepositoryId,
+) -> Result<BranchCatalog, CommandError> {
+    with_forest(&state, |forest| forest.fetch_branch_catalog(repository_id))
 }
 
 #[tauri::command]

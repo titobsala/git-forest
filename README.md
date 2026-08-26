@@ -4,11 +4,11 @@ Keyboard-first desktop control plane for Git worktrees and coding-agent sessions
 
 Git Forest is **not** a full Git client, IDE, or terminal. It connects repositories, worktrees, terminals, and CLI coding agents so a developer can move between isolated workspaces quickly.
 
-This repository is at **Release 0.1.0** — a local Linux internal alpha. It can index local Git repositories, survive missing, moved, invalid, or unavailable checkouts, create, inspect, and safely remove Git worktrees, preview and run metadata cleanup, open a worktree in Warp, launch Codex, Claude Code, or OpenCode, invoke Quick Launch from anywhere with `Super + W`, and track those agent sessions against Linux `/proc`. 0.0.9 was an internal safety gate and is not a separately versioned package.
+This repository is at **Release 0.1.1** — a local Linux internal alpha. It can index local Git repositories, survive missing, moved, invalid, or unavailable checkouts, create, inspect, and safely remove Git worktrees, fetch remote-tracking refs on demand and create a new local tracking branch in a Forest-managed worktree, preview and run metadata cleanup, open a worktree in Warp, launch Codex, Claude Code, or OpenCode, invoke Quick Launch from anywhere with `Super + W`, and track those agent sessions against Linux `/proc`. 0.0.9 was an internal safety gate and is not a separately versioned package.
 
 ## Prerequisites
 
-The 0.1.0 desktop app targets **Linux** first.
+The 0.1.1 desktop app targets **Linux** first.
 
 You need:
 
@@ -55,7 +55,7 @@ That opens the Git Forest window:
 ```text
 Git Forest
 
-Version 0.1.0
+Version 0.1.1
 
 Worktrees in reach.
 ```
@@ -66,7 +66,7 @@ The window shows Forest status and configuration, then lets you:
 - scan a folder with live progress and cancellation, then import selected candidates;
 - search indexed repositories by name, path, branch, or remote;
 - refresh Git metadata and remove a repository from the Forest index only;
-- select a repository to list worktrees, create a new-branch worktree (optionally copying ignored root `.env` files from the indexed repository), and remove one after a safety preview;
+- select a repository to list worktrees, create a new-branch worktree from a local or cached remote-tracking ref (optionally copying ignored root `.env` files from the indexed repository), and remove one after a safety preview;
 - open a selected worktree in Warp (new tab by default, or a new window from Settings);
 - launch the configured default agent (Codex, Claude Code, or OpenCode) in that worktree, then see the session on the cockpit badge, Agents filter, monitor, and tray;
 - invoke Quick Launch with `Super + W` (or `Ctrl/Cmd + K` while Forest is focused), search repositories and worktrees, and open a worktree in Warp with Enter.
@@ -78,7 +78,8 @@ Forest metadata lives in the OS application-data directory (`~/.local/share/dev.
 Limitations in this release:
 
 - new imports are Linked only (existing Managed records still load);
-- worktree creation always makes a new branch from a local base (no attach-existing-branch yet);
+- worktree creation always makes a new local branch (no attach-existing-branch yet); a selected remote base creates a tracking branch from that cached remote-tracking ref;
+- Fetch remotes is explicit and updates refs only — it does not merge, rebase, pull, or change checkout files, and it may fail when non-interactive Git credentials are unavailable;
 - primary, locked, missing, Git-unknown, and status-unavailable worktrees cannot be ordinarily removed;
 - a missing repository is shown as “Missing or moved” and must be located by the user — Forest does not scan the filesystem for it;
 - cleanup is metadata/artifact maintenance: it never deletes a present worktree directory or a foreign Warp file;
@@ -96,6 +97,17 @@ JavaScript packages are managed with **Bun only**. Do not add npm, yarn, or pnpm
 Use a disposable Git repository with an initial `main` commit. Never use a developer repository for destructive scenarios.
 
 After `bun run dev`:
+
+Remote branch worktrees (0.1.1):
+
+1. Link a repository that already has modified and untracked files; confirm those files remain untouched after linking.
+2. Open Create worktree; confirm the dialog lists cached local and remote-tracking refs and does not fetch until you choose Fetch remotes.
+3. From another clone, push a new branch. Activate Fetch remotes, then select `origin/<branch>` as the base.
+4. Create the worktree and confirm Git created a new local branch that tracks the selected remote branch (`branch.<name>.remote` / `merge`).
+5. Confirm ignored root `.env` copy and optional agent launch still work, including Launch anyway / Retry launch without creating a second worktree.
+6. Confirm the dirty primary checkout is unchanged after fetch and create.
+
+Existing alpha smoke:
 
 1. Link a nested path inside an existing Git repository; the indexed path should be the repository root.
 2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.

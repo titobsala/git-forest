@@ -8,9 +8,12 @@ use crate::domain::{
     RemovalBlocker, RemoveWorktreeResult, Repository, RepositoryId, Worktree, WorktreeId,
     WorktreeRemovalPreview,
 };
-use crate::git::refs::{branch_exists, resolve_commit, validate_branch_name, LocalBranch};
+use crate::git::refs::{
+    branch_exists, is_remote_tracking_base, resolve_commit, validate_branch_name,
+};
 use crate::git::status::inspect_worktree_status;
 use crate::git::worktree::{branch_checked_out, path_in_use, GitWorktree, WorktreeAddRequest};
+use crate::git::BranchCatalog;
 use crate::persistence::{
     delete_worktree, find_by_id, find_by_repository_and_path, find_worktree_by_id,
     has_active_session, list_by_repository, upsert_worktree, WorktreeRecord,
@@ -34,12 +37,20 @@ impl ForestService {
         self.list_worktrees(repository_id)
     }
 
-    pub fn list_local_branches(
+    pub fn list_branch_catalog(
         &self,
         repository_id: RepositoryId,
-    ) -> Result<Vec<LocalBranch>, ForestError> {
+    ) -> Result<BranchCatalog, ForestError> {
         let repository = self.require_repository(&repository_id)?;
-        crate::git::refs::list_local_branches(&self.git, &repository.path)
+        crate::git::refs::list_branch_catalog(&self.git, &repository.path)
+    }
+
+    pub fn fetch_branch_catalog(
+        &self,
+        repository_id: RepositoryId,
+    ) -> Result<BranchCatalog, ForestError> {
+        let repository = self.require_repository(&repository_id)?;
+        crate::git::refs::fetch_branch_catalog(&self.git, &repository.path)
     }
 
     pub fn preview_create_worktree(
@@ -71,13 +82,16 @@ impl ForestService {
             std::fs::create_dir_all(parent)?;
         }
 
+        let base = input.base_ref.trim();
+        let track = is_remote_tracking_base(&self.git, &repository.path, base)?;
         let add_result = crate::git::worktree::add_worktree(
             &self.git,
             &repository.path,
             WorktreeAddRequest {
                 path: &preview.destination,
                 branch: input.branch.trim(),
-                base: input.base_ref.trim(),
+                base,
+                track,
             },
         );
         if let Err(error) = add_result {

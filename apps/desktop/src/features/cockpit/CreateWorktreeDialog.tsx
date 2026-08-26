@@ -13,14 +13,15 @@ import { detectAgents, launchAgent } from "../../lib/agents";
 import { toCommandError } from "../../lib/errors";
 import {
   createWorktree,
-  listLocalBranches,
+  fetchBranchCatalog,
+  listBranchCatalog,
   previewCreateWorktree,
 } from "../../lib/worktrees";
 import type {
   AgentAvailability,
   AgentDefinition,
   AgentDefinitionId,
-  LocalBranch,
+  BranchCatalog,
   LocalFileCandidate,
   LocalFileCopyResult,
   Repository,
@@ -28,6 +29,11 @@ import type {
 } from "../../types/forest";
 
 const CREATE_ONLY = "";
+
+const EMPTY_CATALOG: BranchCatalog = {
+  localBranches: [],
+  remoteBranches: [],
+};
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -48,6 +54,27 @@ interface CreateWorktreeDialogProps {
   onAgentLaunched?: () => void;
 }
 
+function catalogContains(catalog: BranchCatalog, baseRef: string): boolean {
+  return (
+    catalog.localBranches.some((item) => item.name === baseRef) ||
+    catalog.remoteBranches.some((item) => item.reference === baseRef)
+  );
+}
+
+function defaultBaseRef(catalog: BranchCatalog, current: string): string {
+  if (catalogContains(catalog, current)) {
+    return current;
+  }
+  if (catalog.localBranches.some((item) => item.name === "main")) {
+    return "main";
+  }
+  return (
+    catalog.localBranches[0]?.name ??
+    catalog.remoteBranches[0]?.reference ??
+    current
+  );
+}
+
 export function CreateWorktreeDialog({
   repository,
   agentDefinitions,
@@ -56,7 +83,7 @@ export function CreateWorktreeDialog({
   onCreated,
   onAgentLaunched,
 }: CreateWorktreeDialogProps) {
-  const [branches, setBranches] = useState<LocalBranch[]>([]);
+  const [catalog, setCatalog] = useState<BranchCatalog>(EMPTY_CATALOG);
   const [baseRef, setBaseRef] = useState("main");
   const [branch, setBranch] = useState("");
   const [name, setName] = useState("");
@@ -65,6 +92,7 @@ export function CreateWorktreeDialog({
   const [copyLocalEnvFiles, setCopyLocalEnvFiles] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(
     null,
@@ -78,12 +106,50 @@ export function CreateWorktreeDialog({
   const retryRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const afterTouched = useRef(false);
+  const branchTouched = useRef(false);
 
   const creationLocked = createdOutcome !== null;
   const copyFailed =
     createdOutcome !== null && createdOutcome.copy.failures.length > 0;
   const launchFailed =
     createdOutcome !== null && createdOutcome.launchError !== null;
+  const catalogBusy = fetching || creationLocked;
+
+  function suggestBranchFromBase(nextCatalog: BranchCatalog, nextBase: string) {
+    if (branchTouched.current) {
+      return;
+    }
+    const remote = nextCatalog.remoteBranches.find(
+      (item) => item.reference === nextBase,
+    );
+    if (remote) {
+      setBranch(remote.name);
+    }
+  }
+
+  function handleBaseRefChange(nextBase: string) {
+    setBaseRef(nextBase);
+    suggestBranchFromBase(catalog, nextBase);
+  }
+
+  async function handleFetchRemotes() {
+    if (catalogBusy) {
+      return;
+    }
+    setError(null);
+    setFetching(true);
+    try {
+      const next = await fetchBranchCatalog(repository.id);
+      const nextBase = defaultBaseRef(next, baseRef);
+      setCatalog(next);
+      setBaseRef(nextBase);
+      suggestBranchFromBase(next, nextBase);
+    } catch (caught: unknown) {
+      setError(toCommandError(caught).message);
+    } finally {
+      setFetching(false);
+    }
+  }
 
   useEffect(() => {
     previousFocus.current =
@@ -97,17 +163,13 @@ export function CreateWorktreeDialog({
 
   useEffect(() => {
     let cancelled = false;
-    void listLocalBranches(repository.id)
+    void listBranchCatalog(repository.id)
       .then((next) => {
         if (cancelled) {
           return;
         }
-        setBranches(next);
-        if (next.some((item) => item.name === "main")) {
-          setBaseRef("main");
-        } else if (next[0]) {
-          setBaseRef(next[0].name);
-        }
+        setCatalog(next);
+        setBaseRef(defaultBaseRef(next, "main"));
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
@@ -241,7 +303,7 @@ export function CreateWorktreeDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (creationLocked) {
+    if (creationLocked || fetching) {
       return;
     }
     setError(null);
@@ -306,8 +368,9 @@ export function CreateWorktreeDialog({
           Create worktree · {repository.name}
         </h2>
         <p className="hint">
-          Creates a new branch from a local base. Attaching an existing branch
-          is not supported yet.
+          Creates a new local branch from the selected base. Selecting a remote
+          branch configures the new branch to track that remote-tracking ref.
+          Attaching an existing local branch is not supported.
         </p>
 
         {availabilityWarning ? (
@@ -333,27 +396,54 @@ export function CreateWorktreeDialog({
         ) : null}
 
         <form className="stack" onSubmit={(event) => void handleSubmit(event)}>
-          <label className="field">
-            <span>Base ref</span>
-            <select
-              value={baseRef}
-              onChange={(event) => setBaseRef(event.target.value)}
-              disabled={creationLocked}
-            >
-              {branches.map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="field">
+            <span id="base-ref-label">Base ref</span>
+            <div className="field-row">
+              <select
+                aria-labelledby="base-ref-label"
+                value={baseRef}
+                onChange={(event) => handleBaseRefChange(event.target.value)}
+                disabled={catalogBusy}
+              >
+                <optgroup label="Local branches">
+                  {catalog.localBranches.map((item) => (
+                    <option key={`local:${item.name}`} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Remote branches">
+                  {catalog.remoteBranches.map((item) => (
+                    <option
+                      key={`remote:${item.reference}`}
+                      value={item.reference}
+                    >
+                      {`${item.remote}/${item.name}`}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <button
+                type="button"
+                className="secondary"
+                disabled={catalogBusy}
+                aria-busy={fetching}
+                onClick={() => void handleFetchRemotes()}
+              >
+                {fetching ? "Fetching…" : "Fetch remotes"}
+              </button>
+            </div>
+          </div>
 
           <label className="field">
             <span>New branch</span>
             <input
               ref={branchRef}
               value={branch}
-              onChange={(event) => setBranch(event.target.value)}
+              onChange={(event) => {
+                branchTouched.current = true;
+                setBranch(event.target.value);
+              }}
               autoComplete="off"
               spellCheck={false}
               disabled={creationLocked}
@@ -464,7 +554,10 @@ export function CreateWorktreeDialog({
               <button type="button" className="secondary" onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" disabled={busy || branch.trim() === ""}>
+              <button
+                type="submit"
+                disabled={busy || fetching || branch.trim() === ""}
+              >
                 Create worktree
               </button>
             </div>
