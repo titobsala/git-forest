@@ -21,7 +21,7 @@ const nativeState = {
   schemaVersion: 2,
   appInfo: {
     name: "Git Forest",
-    version: "0.1.0",
+    version: "0.1.1",
     tagline: "Worktrees in reach.",
   },
   repositories: [sampleRepository()],
@@ -55,7 +55,8 @@ vi.mock("../lib/scan", () => ({
 vi.mock("../lib/worktrees", () => ({
   listWorktrees: vi.fn(),
   refreshWorktrees: vi.fn(),
-  listLocalBranches: vi.fn(),
+  listBranchCatalog: vi.fn(),
+  fetchBranchCatalog: vi.fn(),
   previewCreateWorktree: vi.fn(),
   createWorktree: vi.fn(),
   getWorktreeRemovalPreview: vi.fn(),
@@ -136,7 +137,7 @@ describe("App", () => {
     // Top bar identity. The version lives in Settings, not here.
     expect(screen.getByText("Git Forest")).toBeInTheDocument();
     expect(document.querySelector("header img")).toHaveAttribute("alt", "");
-    expect(screen.queryByText("v0.1.0")).not.toBeInTheDocument();
+    expect(screen.queryByText("v0.1.1")).not.toBeInTheDocument();
   });
 
   it("groups worktrees under their repository with telemetry badges", async () => {

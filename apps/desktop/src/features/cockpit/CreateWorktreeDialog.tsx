@@ -8,19 +8,21 @@
  * command; a launch failure never retries creation.
  */
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Combobox } from "../../components/Combobox";
 import { detectAgents, launchAgent } from "../../lib/agents";
 import { toCommandError } from "../../lib/errors";
 import {
   createWorktree,
-  listLocalBranches,
+  fetchBranchCatalog,
+  listBranchCatalog,
   previewCreateWorktree,
 } from "../../lib/worktrees";
 import type {
   AgentAvailability,
   AgentDefinition,
   AgentDefinitionId,
-  LocalBranch,
+  BranchCatalog,
   LocalFileCandidate,
   LocalFileCopyResult,
   Repository,
@@ -28,6 +30,11 @@ import type {
 } from "../../types/forest";
 
 const CREATE_ONLY = "";
+
+const EMPTY_CATALOG: BranchCatalog = {
+  localBranches: [],
+  remoteBranches: [],
+};
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -48,6 +55,27 @@ interface CreateWorktreeDialogProps {
   onAgentLaunched?: () => void;
 }
 
+function catalogContains(catalog: BranchCatalog, baseRef: string): boolean {
+  return (
+    catalog.localBranches.some((item) => item.name === baseRef) ||
+    catalog.remoteBranches.some((item) => item.reference === baseRef)
+  );
+}
+
+function defaultBaseRef(catalog: BranchCatalog, current: string): string {
+  if (catalogContains(catalog, current)) {
+    return current;
+  }
+  if (catalog.localBranches.some((item) => item.name === "main")) {
+    return "main";
+  }
+  return (
+    catalog.localBranches[0]?.name ??
+    catalog.remoteBranches[0]?.reference ??
+    current
+  );
+}
+
 export function CreateWorktreeDialog({
   repository,
   agentDefinitions,
@@ -56,7 +84,7 @@ export function CreateWorktreeDialog({
   onCreated,
   onAgentLaunched,
 }: CreateWorktreeDialogProps) {
-  const [branches, setBranches] = useState<LocalBranch[]>([]);
+  const [catalog, setCatalog] = useState<BranchCatalog>(EMPTY_CATALOG);
   const [baseRef, setBaseRef] = useState("main");
   const [branch, setBranch] = useState("");
   const [name, setName] = useState("");
@@ -65,6 +93,8 @@ export function CreateWorktreeDialog({
   const [copyLocalEnvFiles, setCopyLocalEnvFiles] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [baseSelectionRequired, setBaseSelectionRequired] = useState(false);
   const [availability, setAvailability] = useState<AgentAvailability[]>([]);
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(
     null,
@@ -73,17 +103,84 @@ export function CreateWorktreeDialog({
   const [createdOutcome, setCreatedOutcome] = useState<CreatedOutcome | null>(
     null,
   );
+  const baseRefInput = useRef<HTMLInputElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const afterTouched = useRef(false);
+  const branchTouched = useRef(false);
+
+  const baseRefGroups = useMemo(
+    () => [
+      {
+        label: "Local branches",
+        options: catalog.localBranches.map((item) => ({
+          value: item.name,
+          label: item.name,
+        })),
+      },
+      {
+        label: "Remote branches",
+        options: catalog.remoteBranches.map((item) => ({
+          value: item.reference,
+          label: `${item.remote}/${item.name}`,
+        })),
+      },
+    ],
+    [catalog],
+  );
 
   const creationLocked = createdOutcome !== null;
   const copyFailed =
     createdOutcome !== null && createdOutcome.copy.failures.length > 0;
   const launchFailed =
     createdOutcome !== null && createdOutcome.launchError !== null;
+  const catalogBusy = fetching || creationLocked;
+
+  function suggestBranchFromBase(nextCatalog: BranchCatalog, nextBase: string) {
+    if (branchTouched.current) {
+      return;
+    }
+    const remote = nextCatalog.remoteBranches.find(
+      (item) => item.reference === nextBase,
+    );
+    if (remote) {
+      setBranch(remote.name);
+    }
+  }
+
+  function handleBaseRefChange(nextBase: string) {
+    setBaseRef(nextBase);
+    setBaseSelectionRequired(false);
+    suggestBranchFromBase(catalog, nextBase);
+  }
+
+  async function handleFetchRemotes() {
+    if (catalogBusy) {
+      return;
+    }
+    setError(null);
+    setFetching(true);
+    try {
+      const next = await fetchBranchCatalog(repository.id);
+      setCatalog(next);
+      if (!catalogContains(next, baseRef)) {
+        setBaseRef("");
+        setBaseSelectionRequired(true);
+        if (!branchTouched.current) {
+          setBranch("");
+        }
+      } else {
+        setBaseSelectionRequired(false);
+        suggestBranchFromBase(next, baseRef);
+      }
+    } catch (caught: unknown) {
+      setError(toCommandError(caught).message);
+    } finally {
+      setFetching(false);
+    }
+  }
 
   useEffect(() => {
     previousFocus.current =
@@ -97,17 +194,14 @@ export function CreateWorktreeDialog({
 
   useEffect(() => {
     let cancelled = false;
-    void listLocalBranches(repository.id)
+    void listBranchCatalog(repository.id)
       .then((next) => {
         if (cancelled) {
           return;
         }
-        setBranches(next);
-        if (next.some((item) => item.name === "main")) {
-          setBaseRef("main");
-        } else if (next[0]) {
-          setBaseRef(next[0].name);
-        }
+        setCatalog(next);
+        setBaseRef(defaultBaseRef(next, repository.primaryBranch ?? "main"));
+        setBaseSelectionRequired(false);
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
@@ -117,7 +211,7 @@ export function CreateWorktreeDialog({
     return () => {
       cancelled = true;
     };
-  }, [repository.id]);
+  }, [repository.id, repository.primaryBranch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +235,12 @@ export function CreateWorktreeDialog({
       cancelled = true;
     };
   }, [defaultAgentId]);
+
+  useEffect(() => {
+    if (baseSelectionRequired) {
+      baseRefInput.current?.focus();
+    }
+  }, [baseSelectionRequired]);
 
   useEffect(() => {
     if (launchFailed) {
@@ -241,7 +341,7 @@ export function CreateWorktreeDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (creationLocked) {
+    if (creationLocked || fetching || baseSelectionRequired || !baseRef) {
       return;
     }
     setError(null);
@@ -306,8 +406,10 @@ export function CreateWorktreeDialog({
           Create worktree · {repository.name}
         </h2>
         <p className="hint">
-          Creates a new branch from a local base. Attaching an existing branch
-          is not supported yet.
+          Creates a new local branch from the selected base in a separate
+          checkout. The linked repository stays on its current branch. Selecting
+          a remote branch also sets upstream tracking. Attaching an existing
+          local branch is not supported.
         </p>
 
         {availabilityWarning ? (
@@ -333,30 +435,52 @@ export function CreateWorktreeDialog({
         ) : null}
 
         <form className="stack" onSubmit={(event) => void handleSubmit(event)}>
-          <label className="field">
-            <span>Base ref</span>
-            <select
-              value={baseRef}
-              onChange={(event) => setBaseRef(event.target.value)}
-              disabled={creationLocked}
-            >
-              {branches.map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="field">
+            <span id="base-ref-label">Base ref</span>
+            <div className="field-row">
+              <Combobox
+                ref={baseRefInput}
+                labelledBy="base-ref-label"
+                value={baseRef}
+                onChange={handleBaseRefChange}
+                disabled={catalogBusy}
+                placeholder={
+                  baseSelectionRequired
+                    ? "Select a base branch"
+                    : "Filter branches…"
+                }
+                groups={baseRefGroups}
+              />
+              <button
+                type="button"
+                className="secondary"
+                disabled={catalogBusy}
+                aria-busy={fetching}
+                onClick={() => void handleFetchRemotes()}
+              >
+                {fetching ? "Fetching…" : "Fetch remotes"}
+              </button>
+            </div>
+            {baseSelectionRequired ? (
+              <p className="hint" role="alert">
+                The selected base is no longer available after fetching. Choose
+                a base branch before continuing.
+              </p>
+            ) : null}
+          </div>
 
           <label className="field">
             <span>New branch</span>
             <input
               ref={branchRef}
               value={branch}
-              onChange={(event) => setBranch(event.target.value)}
+              onChange={(event) => {
+                branchTouched.current = true;
+                setBranch(event.target.value);
+              }}
               autoComplete="off"
               spellCheck={false}
-              disabled={creationLocked}
+              disabled={creationLocked || baseSelectionRequired}
             />
           </label>
 
@@ -464,7 +588,16 @@ export function CreateWorktreeDialog({
               <button type="button" className="secondary" onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" disabled={busy || branch.trim() === ""}>
+              <button
+                type="submit"
+                disabled={
+                  busy ||
+                  fetching ||
+                  baseSelectionRequired ||
+                  baseRef === "" ||
+                  branch.trim() === ""
+                }
+              >
                 Create worktree
               </button>
             </div>

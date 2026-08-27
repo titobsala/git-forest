@@ -1,6 +1,6 @@
 [package]
 name = "git-forest"
-version = "0.1.0"
+version = "0.1.1"
 description = "Keyboard-first Git worktree and coding-agent control plane"
 authors = ["Git Forest contributors"]
 edition = "2021"

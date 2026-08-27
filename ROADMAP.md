@@ -5,7 +5,7 @@
 Current implementation:
 
 ```text
-Release 0.1.0
+Release 0.1.1
 ```
 
 Completed:
@@ -21,6 +21,7 @@ Completed:
 0.0.8 Sessions & Process Tracking
 0.0.9 Safety, Reconciliation & Cleanup
 0.1.0 Internal Alpha
+0.1.1 Remote Branch Worktrees
 ```
 
 Next:
@@ -1446,6 +1447,29 @@ Address:
 ## Acceptance Criteria
 
 The developer can use Git Forest as part of normal daily development without immediately needing a shell workaround for basic Forest actions.
+
+---
+
+# Release 0.1.1 — Remote Branch Worktrees
+
+Status: **complete**.
+
+## Goal
+
+Add an explicit, safe workflow for fetching remote refs and creating a new local tracking branch in a Forest-managed worktree, without changing the current checkout or its uncommitted files.
+
+## Product
+
+* Linking remains metadata-only.
+* Opening Create worktree stays offline and reads cached local and remote-tracking refs.
+* `Fetch remotes` is explicit: `git fetch --all --prune --no-recurse-submodules`. It updates refs only.
+* Selecting a remote base creates a new local branch that tracks that exact remote-tracking ref. Attaching an existing local branch is still unsupported.
+* Fetch uses machine Git configuration and credentials. Terminal prompts stay disabled; authentication failures return a structured Git error and keep the cached catalog.
+* Dirty and untracked files in the primary checkout are left untouched.
+
+## Acceptance Criteria
+
+A developer can fetch a newly pushed remote branch on demand, create a tracking worktree from it, and keep the linked primary checkout byte-for-byte unchanged.
 
 ---
 

@@ -90,6 +90,17 @@ export interface LocalBranch {
   name: string;
 }
 
+export interface RemoteBranch {
+  remote: string;
+  name: string;
+  reference: string;
+}
+
+export interface BranchCatalog {
+  localBranches: LocalBranch[];
+  remoteBranches: RemoteBranch[];
+}
+
 export interface LocalFileCandidate {
   path: string;
   sizeBytes: number;
@@ -302,7 +313,7 @@ export interface CleanupResult {
 
 export const FALLBACK_APP_INFO: AppInfo = {
   name: "Git Forest",
-  version: "0.1.0",
+  version: "0.1.1",
   tagline: "Worktrees in reach.",
 };
 

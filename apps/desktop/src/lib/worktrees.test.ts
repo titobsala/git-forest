@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorktree,
+  fetchBranchCatalog,
   getWorktreeRemovalPreview,
+  listBranchCatalog,
   listWorktrees,
   removeWorktree,
 } from "./worktrees";
@@ -19,6 +21,16 @@ describe("worktree commands", () => {
   it("invokes list, create, preview, and remove commands", async () => {
     await listWorktrees("repo-1");
     expect(invokeCommand).toHaveBeenCalledWith("list_worktrees", {
+      repositoryId: "repo-1",
+    });
+
+    await listBranchCatalog("repo-1");
+    expect(invokeCommand).toHaveBeenCalledWith("list_branch_catalog", {
+      repositoryId: "repo-1",
+    });
+
+    await fetchBranchCatalog("repo-1");
+    expect(invokeCommand).toHaveBeenCalledWith("fetch_branch_catalog", {
       repositoryId: "repo-1",
     });
 

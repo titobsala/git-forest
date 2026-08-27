@@ -13,8 +13,8 @@ use commands::repositories::{
 use commands::scan::{cancel_repository_scan, start_repository_scan};
 use commands::terminals::open_worktree;
 use commands::worktrees::{
-    create_worktree, get_worktree_removal_preview, list_local_branches, list_worktrees,
-    preview_create_worktree, refresh_worktrees, remove_worktree,
+    create_worktree, fetch_branch_catalog, get_worktree_removal_preview, list_branch_catalog,
+    list_worktrees, preview_create_worktree, refresh_worktrees, remove_worktree,
 };
 use forest::ForestService;
 use persistence::Database;
@@ -89,7 +89,8 @@ pub fn run() {
             cancel_repository_scan,
             list_worktrees,
             refresh_worktrees,
-            list_local_branches,
+            list_branch_catalog,
+            fetch_branch_catalog,
             preview_create_worktree,
             create_worktree,
             get_worktree_removal_preview,
