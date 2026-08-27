@@ -8,7 +8,8 @@
  * command; a launch failure never retries creation.
  */
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Combobox } from "../../components/Combobox";
 import { detectAgents, launchAgent } from "../../lib/agents";
 import { toCommandError } from "../../lib/errors";
 import {
@@ -102,13 +103,33 @@ export function CreateWorktreeDialog({
   const [createdOutcome, setCreatedOutcome] = useState<CreatedOutcome | null>(
     null,
   );
-  const baseRefSelect = useRef<HTMLSelectElement>(null);
+  const baseRefInput = useRef<HTMLInputElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const afterTouched = useRef(false);
   const branchTouched = useRef(false);
+
+  const baseRefGroups = useMemo(
+    () => [
+      {
+        label: "Local branches",
+        options: catalog.localBranches.map((item) => ({
+          value: item.name,
+          label: item.name,
+        })),
+      },
+      {
+        label: "Remote branches",
+        options: catalog.remoteBranches.map((item) => ({
+          value: item.reference,
+          label: `${item.remote}/${item.name}`,
+        })),
+      },
+    ],
+    [catalog],
+  );
 
   const creationLocked = createdOutcome !== null;
   const copyFailed =
@@ -179,7 +200,7 @@ export function CreateWorktreeDialog({
           return;
         }
         setCatalog(next);
-        setBaseRef(defaultBaseRef(next, "main"));
+        setBaseRef(defaultBaseRef(next, repository.primaryBranch ?? "main"));
         setBaseSelectionRequired(false);
       })
       .catch((caught: unknown) => {
@@ -190,7 +211,7 @@ export function CreateWorktreeDialog({
     return () => {
       cancelled = true;
     };
-  }, [repository.id]);
+  }, [repository.id, repository.primaryBranch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +238,7 @@ export function CreateWorktreeDialog({
 
   useEffect(() => {
     if (baseSelectionRequired) {
-      baseRefSelect.current?.focus();
+      baseRefInput.current?.focus();
     }
   }, [baseSelectionRequired]);
 
@@ -385,9 +406,10 @@ export function CreateWorktreeDialog({
           Create worktree · {repository.name}
         </h2>
         <p className="hint">
-          Creates a new local branch from the selected base. Selecting a remote
-          branch configures the new branch to track that remote-tracking ref.
-          Attaching an existing local branch is not supported.
+          Creates a new local branch from the selected base in a separate
+          checkout. The linked repository stays on its current branch. Selecting
+          a remote branch also sets upstream tracking. Attaching an existing
+          local branch is not supported.
         </p>
 
         {availabilityWarning ? (
@@ -416,36 +438,19 @@ export function CreateWorktreeDialog({
           <div className="field">
             <span id="base-ref-label">Base ref</span>
             <div className="field-row">
-              <select
-                ref={baseRefSelect}
-                aria-labelledby="base-ref-label"
+              <Combobox
+                ref={baseRefInput}
+                labelledBy="base-ref-label"
                 value={baseRef}
-                onChange={(event) => handleBaseRefChange(event.target.value)}
+                onChange={handleBaseRefChange}
                 disabled={catalogBusy}
-              >
-                {baseSelectionRequired ? (
-                  <option value="" disabled>
-                    Select a base branch
-                  </option>
-                ) : null}
-                <optgroup label="Local branches">
-                  {catalog.localBranches.map((item) => (
-                    <option key={`local:${item.name}`} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Remote branches">
-                  {catalog.remoteBranches.map((item) => (
-                    <option
-                      key={`remote:${item.reference}`}
-                      value={item.reference}
-                    >
-                      {`${item.remote}/${item.name}`}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+                placeholder={
+                  baseSelectionRequired
+                    ? "Select a base branch"
+                    : "Filter branches…"
+                }
+                groups={baseRefGroups}
+              />
               <button
                 type="button"
                 className="secondary"

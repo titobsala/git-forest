@@ -44,6 +44,7 @@ function renderDialog(
     onCreated?: ReturnType<typeof vi.fn>;
     onClose?: ReturnType<typeof vi.fn>;
     onAgentLaunched?: ReturnType<typeof vi.fn>;
+    repository?: typeof repository;
   } = {},
 ) {
   const onCreated = overrides.onCreated ?? vi.fn();
@@ -51,7 +52,7 @@ function renderDialog(
   const onAgentLaunched = overrides.onAgentLaunched ?? vi.fn();
   render(
     <CreateWorktreeDialog
-      repository={repository}
+      repository={overrides.repository ?? repository}
       agentDefinitions={agents}
       defaultAgentId="codex"
       onClose={onClose}
@@ -60,6 +61,21 @@ function renderDialog(
     />,
   );
   return { onCreated, onClose, onAgentLaunched };
+}
+
+async function openBaseRef(user: ReturnType<typeof userEvent.setup>) {
+  const combo = await screen.findByRole("combobox", { name: "Base ref" });
+  await user.click(combo);
+  await screen.findByRole("listbox");
+  return combo;
+}
+
+async function chooseBaseRef(
+  user: ReturnType<typeof userEvent.setup>,
+  optionName: string,
+) {
+  await openBaseRef(user);
+  await user.click(await screen.findByRole("option", { name: optionName }));
 }
 
 describe("CreateWorktreeDialog", () => {
@@ -544,7 +560,9 @@ describe("CreateWorktreeDialog", () => {
   });
 
   it("loads the cached catalog on open without fetching remotes", async () => {
+    const user = userEvent.setup();
     renderDialog();
+    await openBaseRef(user);
     expect(
       await screen.findByRole("option", { name: "main" }),
     ).toBeInTheDocument();
@@ -552,7 +570,23 @@ describe("CreateWorktreeDialog", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("renders local and remote optgroups", async () => {
+  it("defaults the base ref to the repository primary branch", async () => {
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "develop" }, { name: "main" }],
+      remoteBranches: [],
+    });
+    renderDialog({
+      repository: sampleRepository({ primaryBranch: "develop" }),
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Base ref" })).toHaveValue(
+        "develop",
+      );
+    });
+  });
+
+  it("renders local and remote groups in the combobox", async () => {
+    const user = userEvent.setup();
     listMock.mockResolvedValue({
       localBranches: [{ name: "main" }, { name: "develop" }],
       remoteBranches: [
@@ -564,22 +598,57 @@ describe("CreateWorktreeDialog", () => {
       ],
     });
     renderDialog();
+    const list = await openBaseRef(user);
     expect(
-      await screen.findByRole("group", { name: "Local branches" }),
+      within(list.ownerDocument.body).getByRole("listbox"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Remote branches" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Local branches")).toBeInTheDocument();
+    expect(screen.getByText("Remote branches")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "main" })).toBeInTheDocument();
     expect(
       screen.getByRole("option", { name: "origin/feat/example" }),
-    ).toHaveValue("refs/remotes/origin/feat/example");
+    ).toBeInTheDocument();
+  });
+
+  it("filters base ref options as the user types", async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({
+      localBranches: [{ name: "main" }, { name: "develop" }],
+      remoteBranches: [
+        {
+          remote: "origin",
+          name: "feat/example",
+          reference: "refs/remotes/origin/feat/example",
+        },
+      ],
+    });
+    renderDialog();
+    const combo = await openBaseRef(user);
+    await user.type(combo, "feat");
+    expect(
+      screen.getByRole("option", { name: "origin/feat/example" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "develop" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes the base ref list on Escape without dismissing the dialog", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderDialog();
+    await openBaseRef(user);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: /Create worktree/ }),
+    ).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("fetches remotes and replaces the catalog options", async () => {
     const user = userEvent.setup();
     renderDialog();
-    await screen.findByRole("option", { name: "main" });
+    await openBaseRef(user);
     expect(
       screen.queryByRole("option", { name: "origin/feat/example" }),
     ).not.toBeInTheDocument();
@@ -588,6 +657,7 @@ describe("CreateWorktreeDialog", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("repo-1");
+    await openBaseRef(user);
     expect(
       await screen.findByRole("option", { name: "origin/feat/example" }),
     ).toBeInTheDocument();
@@ -613,7 +683,7 @@ describe("CreateWorktreeDialog", () => {
 
     const base = await screen.findByLabelText("Base ref");
     const branchInput = screen.getByLabelText("New branch");
-    await user.selectOptions(base, "refs/remotes/origin/feat/deleted");
+    await chooseBaseRef(user, "origin/feat/deleted");
     expect(branchInput).toHaveValue("feat/deleted");
 
     await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
@@ -630,7 +700,7 @@ describe("CreateWorktreeDialog", () => {
     ).toBeDisabled();
     expect(createMock).not.toHaveBeenCalled();
 
-    await user.selectOptions(base, "main");
+    await chooseBaseRef(user, "main");
     expect(branchInput).toBeEnabled();
     expect(branchInput).toHaveValue("");
   });
@@ -652,6 +722,7 @@ describe("CreateWorktreeDialog", () => {
       ],
     });
     const { onClose } = renderDialog();
+    await openBaseRef(user);
     expect(
       await screen.findByRole("option", { name: "origin/feat/cached" }),
     ).toBeInTheDocument();
@@ -661,6 +732,7 @@ describe("CreateWorktreeDialog", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "could not fetch remotes",
     );
+    await openBaseRef(user);
     expect(
       screen.getByRole("option", { name: "origin/feat/cached" }),
     ).toBeInTheDocument();
@@ -685,8 +757,7 @@ describe("CreateWorktreeDialog", () => {
       localEnvCopy: { copied: [], failures: [] },
     });
     renderDialog();
-    const base = await screen.findByLabelText("Base ref");
-    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    await chooseBaseRef(user, "origin/feat/example");
     await user.selectOptions(screen.getByLabelText("After creation"), "");
     await user.click(screen.getByRole("button", { name: "Create worktree" }));
 
@@ -723,11 +794,10 @@ describe("CreateWorktreeDialog", () => {
       ],
     });
     renderDialog();
-    const base = await screen.findByLabelText("Base ref");
     const branchInput = screen.getByLabelText("New branch");
-    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    await chooseBaseRef(user, "origin/feat/example");
     expect(branchInput).toHaveValue("feat/example");
-    await user.selectOptions(base, "refs/remotes/origin/feat/other");
+    await chooseBaseRef(user, "origin/feat/other");
     expect(branchInput).toHaveValue("feat/other");
   });
 
@@ -749,16 +819,18 @@ describe("CreateWorktreeDialog", () => {
       ],
     });
     renderDialog();
-    const base = await screen.findByLabelText("Base ref");
     const branchInput = screen.getByLabelText("New branch");
-    await user.selectOptions(base, "refs/remotes/origin/feat/example");
+    await chooseBaseRef(user, "origin/feat/example");
     expect(branchInput).toHaveValue("feat/example");
     await user.clear(branchInput);
     await user.type(branchInput, "custom/name");
-    await user.selectOptions(base, "refs/remotes/origin/feat/other");
+    await chooseBaseRef(user, "origin/feat/other");
     expect(branchInput).toHaveValue("custom/name");
     await user.click(screen.getByRole("button", { name: "Fetch remotes" }));
-    await screen.findByRole("option", { name: "origin/feat/example" });
+    await openBaseRef(user);
+    expect(
+      await screen.findByRole("option", { name: "origin/feat/example" }),
+    ).toBeInTheDocument();
     expect(branchInput).toHaveValue("custom/name");
   });
 });

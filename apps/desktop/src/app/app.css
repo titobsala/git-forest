@@ -202,8 +202,9 @@
     @apply flex items-stretch gap-1.5;
   }
 
-  .panel .field-row select {
-    @apply w-auto min-w-0 flex-1;
+  .panel .field-row select,
+  .panel .field-row .combobox {
+    @apply relative w-auto min-w-0 flex-1;
   }
 
   .panel .field-row button {
