@@ -49,15 +49,15 @@ fn creates_a_new_branch_worktree_under_the_managed_root() {
         .create_worktree(CreateWorktreeInput {
             repository_id: repository.id.clone(),
             base_ref: "main".into(),
-            branch: "feat/risk-483".into(),
+            branch: "feat/auth-142".into(),
             name: None,
             copy_local_env_files: false,
         })
         .expect("create");
 
-    assert_eq!(result.worktree.branch.as_deref(), Some("feat/risk-483"));
+    assert_eq!(result.worktree.branch.as_deref(), Some("feat/auth-142"));
     assert!(result.worktree.path.ends_with(format!(
-        "worktrees/demo-app-{}/feat-risk-483",
+        "worktrees/demo-app-{}/feat-auth-142",
         repository.id.as_str()
     )));
     assert!(result.worktree.path.is_dir());

@@ -101,8 +101,8 @@ describe("CreateWorktreeDialog", () => {
       ],
     });
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [],
     });
@@ -136,7 +136,7 @@ describe("CreateWorktreeDialog", () => {
     await user.type(screen.getByLabelText("New branch"), "feat/demo");
     expect(
       await screen.findByText(
-        "Destination: /tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+        "Destination: /tmp/forest/worktrees/acme-app-repo-1/feat-demo",
       ),
     ).toBeInTheDocument();
 
@@ -292,7 +292,7 @@ describe("CreateWorktreeDialog", () => {
     renderDialog();
     await user.type(screen.getByLabelText("New branch"), "feat/demo");
     await screen.findByText(
-      "Destination: /tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      "Destination: /tmp/forest/worktrees/acme-app-repo-1/feat-demo",
     );
     expect(
       screen.queryByLabelText("Copy local environment files"),
@@ -302,8 +302,8 @@ describe("CreateWorktreeDialog", () => {
   it("does not preview again when the copy checkbox is toggled", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
     });
@@ -328,8 +328,8 @@ describe("CreateWorktreeDialog", () => {
   it("defaults the environment copy checkbox on and sends true", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [
         { path: ".env", sizeBytes: 12 },
@@ -363,8 +363,8 @@ describe("CreateWorktreeDialog", () => {
   it("keeps a manual opt-out across preview refresh", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
     });
@@ -386,7 +386,7 @@ describe("CreateWorktreeDialog", () => {
       "custom",
     );
     await screen.findByText(
-      "Destination: /tmp/forest/worktrees/exog-app-repo-1/feat-demo",
+      "Destination: /tmp/forest/worktrees/acme-app-repo-1/feat-demo",
     );
     expect(
       screen.getByLabelText("Copy local environment files"),
@@ -405,8 +405,8 @@ describe("CreateWorktreeDialog", () => {
   it("launches the selected agent after a successful copy", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
     });
@@ -432,8 +432,8 @@ describe("CreateWorktreeDialog", () => {
   it("keeps the created worktree on copy failure and launches only when asked", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
     });
@@ -481,8 +481,8 @@ describe("CreateWorktreeDialog", () => {
   it("keeps copy failure details when launch anyway fails and retries only launch", async () => {
     const user = userEvent.setup();
     previewMock.mockResolvedValue({
-      destination: "/tmp/forest/worktrees/exog-app-repo-1/feat-demo",
-      repositorySlug: "exog-app-repo-1",
+      destination: "/tmp/forest/worktrees/acme-app-repo-1/feat-demo",
+      repositorySlug: "acme-app-repo-1",
       worktreeSlug: "feat-demo",
       localEnvFiles: [{ path: ".env", sizeBytes: 12 }],
     });

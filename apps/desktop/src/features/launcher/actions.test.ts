@@ -9,7 +9,7 @@ const worktree = sampleWorktree();
 const repositoryResult: LaunchResult = {
   id: "repository:repo-1",
   kind: "repository",
-  title: "EXOG App",
+  title: "Acme App",
   subtitle: repository.path,
   repository,
   worktree: null,
@@ -18,7 +18,7 @@ const repositoryResult: LaunchResult = {
 const worktreeResult: LaunchResult = {
   id: "worktree:wt-1",
   kind: "worktree",
-  title: "EXOG App / feat/risk-483",
+  title: "Acme App / feat/auth-142",
   subtitle: worktree.path,
   repository,
   worktree,

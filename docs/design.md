@@ -91,10 +91,10 @@ The application layout follows a 4-tier horizontal split stage:
 │    │            │ ┌─────────────────────────────────────────────┐ │ PANEL        │
 │    │ (w-56 /    │ │ Cockpit Control Bar & Filters               │ │              │
 │(w- │  224px)    │ ├─────────────────────────────────────────────┤ │ (w-80 /      │
-│ 14 │            │ │ 📦 EXOG App (4 worktrees)       [▼ Expand]  │ │  320px)      │
-│ /  │ Collapsible│ │  ├── feat/risk-483     [Codex PID 48912]    │ │              │
+│ 14 │            │ │ 📦 Acme App (4 worktrees)       [▼ Expand]  │ │  320px)      │
+│ /  │ Collapsible│ │  ├── feat/auth-142     [Codex PID 48912]    │ │              │
 │56px│            │ │  └── fix/report-export [clean]              │ │ Worktree     │
-│    │            │ │ 📦 EXOG API (2 worktrees)                   │ │ Metadata,    │
+│    │            │ │ 📦 Acme API (2 worktrees)                   │ │ Metadata,    │
 │    │            │ │  └── refactor/db-schema [dirty ▲]           │ │ Telemetry &  │
 │    │            │ └─────────────────────────────────────────────┘ │ Triggers     │
 └────┴────────────┴─────────────────────────────────────────────────┴──────────────┘
@@ -132,7 +132,7 @@ Worktree rows are designed as high-density list items:
 
 To manage large multi-repository workspaces without clutter:
 
-- **Individual Repo Header Toggle:** Clicking a repository header (`📦 EXOG App`) toggles the visibility of its child worktree rows (`isCollapsed`).
+- **Individual Repo Header Toggle:** Clicking a repository header (`📦 Acme App`) toggles the visibility of its child worktree rows (`isCollapsed`).
 - **Global Accordion Control:** Top bar button toggles all repositories simultaneously (`► Expand All` / `▼ Collapse All`).
 - **Side Panel Collapsibility:** Left L2 panel and Right Inspector panel collapse to single-icon sidebars to maximize workspace area for wide screens.
 
@@ -149,7 +149,7 @@ Triggered via `Super + W` or `Cmd + K`:
 
 Before anything is typed, the palette shows the first seven runnable commands — enough to browse, short enough to scan. Typing ranks commands on **title and keywords only**, deliberately not the subtitle: the subtitle holds the selected repository or worktree name, and matching it would rank `Remove worktree… feat/x` above `feat/x` itself for anyone searching a branch.
 
-**Context without a submenu.** Commands that act on a selection carry it in the subtitle (`New worktree… · EXOG App`) and go disabled with a reason (`Select a repository first`) when nothing is selected. That is the flat-list answer to context, and it covers the common case.
+**Context without a submenu.** Commands that act on a selection carry it in the subtitle (`New worktree… · Acme App`) and go disabled with a reason (`Select a repository first`) when nothing is selected. That is the flat-list answer to context, and it covers the common case.
 
 **Disabled entries stay findable.** Anything that cannot run — a deferred feature, a command with nothing selected — is dimmed, marked `aria-disabled`, shows its reason as a badge, and is inert on `Enter`. It still matches the query, because a search for "remove" with nothing selected is better answered with *Select a worktree first* than with nothing.
 

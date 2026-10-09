@@ -190,11 +190,11 @@ mod tests {
     #[test]
     fn finds_repositories_within_depth_and_skips_ignored_directories() {
         let env = TempGit::new();
-        let app = env.init_repo("projects/exog-app");
+        let app = env.init_repo("projects/acme-app");
         env.commit_file(&app, "README.md", "app\n", "initial");
-        let api = env.init_repo("projects/exog-api");
+        let api = env.init_repo("projects/acme-api");
         env.commit_file(&api, "README.md", "api\n", "initial");
-        let ignored = env.init_repo("projects/exog-app/node_modules/nested-git");
+        let ignored = env.init_repo("projects/acme-app/node_modules/nested-git");
         env.commit_file(&ignored, "README.md", "ignored\n", "initial");
         fs::create_dir_all(env.path("projects/notes")).expect("notes");
 
@@ -213,8 +213,8 @@ mod tests {
             .iter()
             .map(|item| item.name.clone())
             .collect();
-        assert!(names.contains("exog-app"));
-        assert!(names.contains("exog-api"));
+        assert!(names.contains("acme-app"));
+        assert!(names.contains("acme-api"));
         assert!(!names.contains("nested-git"));
         assert!(!result.cancelled);
     }

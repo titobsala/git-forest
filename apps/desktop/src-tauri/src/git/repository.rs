@@ -75,14 +75,14 @@ mod tests {
         let env = TempGit::new();
         let repo = env.init_repo("app");
         env.commit_file(&repo, "README.md", "hello\n", "initial");
-        env.add_remote(&repo, "https://example.test/exog.git");
+        env.add_remote(&repo, "https://example.test/acme.git");
         env.set_origin_head(&repo, "develop");
 
         let inspection = inspect_repository(&GitRunner::new(), &repo).expect("inspect");
         assert_eq!(inspection.primary_branch.as_deref(), Some("develop"));
         assert_eq!(
             inspection.remote_url.as_deref(),
-            Some("https://example.test/exog.git")
+            Some("https://example.test/acme.git")
         );
     }
 

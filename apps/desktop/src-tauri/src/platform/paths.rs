@@ -105,8 +105,8 @@ mod tests {
             PathBuf::from("/tmp/home")
         );
         assert_eq!(
-            platform.expand_user_path(PathBuf::from("/var/repos/exog")),
-            PathBuf::from("/var/repos/exog")
+            platform.expand_user_path(PathBuf::from("/var/repos/acme")),
+            PathBuf::from("/var/repos/acme")
         );
     }
 

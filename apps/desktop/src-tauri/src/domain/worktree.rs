@@ -140,9 +140,9 @@ mod tests {
         let worktree = Worktree {
             id: WorktreeId::from_string("wt-1"),
             repository_id: RepositoryId::from_string("repo-1"),
-            name: "feat-risk-483".to_owned(),
-            path: PathBuf::from("/tmp/forest/worktrees/exog-app/feat-risk-483"),
-            branch: Some("feat/risk-483".to_owned()),
+            name: "feat-auth-142".to_owned(),
+            path: PathBuf::from("/tmp/forest/worktrees/acme-app/feat-auth-142"),
+            branch: Some("feat/auth-142".to_owned()),
             head: Some("abcdef".to_owned()),
             detached: false,
             locked: false,
@@ -169,8 +169,8 @@ mod tests {
         let json = serde_json::to_value(&worktree).expect("serialize");
         assert_eq!(json["id"], "wt-1");
         assert_eq!(json["repositoryId"], "repo-1");
-        assert_eq!(json["name"], "feat-risk-483");
-        assert_eq!(json["branch"], "feat/risk-483");
+        assert_eq!(json["name"], "feat-auth-142");
+        assert_eq!(json["branch"], "feat/auth-142");
         assert_eq!(json["trackedChanges"], 1);
         assert_eq!(json["untrackedFiles"], 2);
         assert_eq!(json["ignoredFiles"], 3);
@@ -194,7 +194,7 @@ mod tests {
             id: WorktreeId::from_string("wt-1"),
             repository_id: RepositoryId::from_string("repo-1"),
             name: "feat-env".to_owned(),
-            path: PathBuf::from("/tmp/forest/worktrees/exog-app/feat-env"),
+            path: PathBuf::from("/tmp/forest/worktrees/acme-app/feat-env"),
             branch: Some("feat/env".to_owned()),
             head: Some("abcdef".to_owned()),
             detached: false,

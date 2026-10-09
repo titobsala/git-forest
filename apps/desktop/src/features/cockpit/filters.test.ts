@@ -8,18 +8,18 @@ describe("worktreeMatches", () => {
   });
 
   it("matches branch, name and path", () => {
-    const worktree = sampleWorktree({ branch: "feat/risk-483" });
+    const worktree = sampleWorktree({ branch: "feat/auth-142" });
 
-    expect(worktreeMatches(worktree, "risk")).toBe(true);
-    expect(worktreeMatches(worktree, "feat-risk")).toBe(true);
+    expect(worktreeMatches(worktree, "auth")).toBe(true);
+    expect(worktreeMatches(worktree, "feat-auth")).toBe(true);
     expect(worktreeMatches(worktree, "forest/worktrees")).toBe(true);
   });
 
   it("requires every whitespace-separated term", () => {
-    const worktree = sampleWorktree({ branch: "feat/risk-483" });
+    const worktree = sampleWorktree({ branch: "feat/auth-142" });
 
-    expect(worktreeMatches(worktree, "risk 483")).toBe(true);
-    expect(worktreeMatches(worktree, "risk nope")).toBe(false);
+    expect(worktreeMatches(worktree, "auth 142")).toBe(true);
+    expect(worktreeMatches(worktree, "auth nope")).toBe(false);
   });
 });
 

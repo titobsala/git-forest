@@ -145,7 +145,7 @@ describe("App", () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       sampleWorktree({
         id: "wt-1",
-        branch: "feat/risk-483",
+        branch: "feat/auth-142",
         trackedChanges: 2,
       }),
       sampleWorktree({
@@ -160,7 +160,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     expect(screen.getByText("dirty")).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe("App", () => {
     // The repository name also appears in the L2 sidebar, so scope the
     // accordion assertion to the cockpit list.
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
-    expect(cockpit.getByRole("button", { name: /EXOG App/ })).toHaveAttribute(
+    expect(cockpit.getByRole("button", { name: /Acme App/ })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -179,20 +179,20 @@ describe("App", () => {
     const user = userEvent.setup();
     vi.mocked(getForestState).mockResolvedValue(nativeState);
     vi.mocked(listWorktrees).mockResolvedValue([
-      sampleWorktree({ branch: "feat/risk-483" }),
+      sampleWorktree({ branch: "feat/auth-142" }),
     ]);
 
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     await user.keyboard("{Control>}k{/Control}");
 
     const dialog = await screen.findByRole("dialog", { name: "Quick Launch" });
     expect(dialog).toBeInTheDocument();
-    expect(screen.getByText("EXOG App / feat/risk-483")).toBeInTheDocument();
+    expect(screen.getByText("Acme App / feat/auth-142")).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
@@ -298,7 +298,7 @@ describe("App", () => {
     });
     vi.mocked(listWorktrees).mockImplementation(async (repositoryId) =>
       repositoryId === "repo-1"
-        ? [sampleWorktree({ id: "wt-1", branch: "feat/risk-483" })]
+        ? [sampleWorktree({ id: "wt-1", branch: "feat/auth-142" })]
         : [
             sampleWorktree({
               id: "wt-2",
@@ -316,9 +316,9 @@ describe("App", () => {
     const inspector = within(
       screen.getByRole("complementary", { name: "Worktree inspector" }),
     );
-    expect(inspector.getByText("EXOG App")).toBeInTheDocument();
+    expect(inspector.getByText("Acme App")).toBeInTheDocument();
 
-    // Moving to another repository must not leave EXOG App's worktree behind:
+    // Moving to another repository must not leave Acme App's worktree behind:
     // the inspector would otherwise offer to remove it as if it were Ledger's.
     await user.click(
       within(
@@ -394,7 +394,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
@@ -411,7 +411,7 @@ describe("App", () => {
     render(<App />);
 
     const option = await screen.findByRole("option", {
-      name: /feat\/risk-483/,
+      name: /feat\/auth-142/,
     });
     option.focus();
     await user.keyboard("{Enter}");
@@ -427,12 +427,12 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     await user.keyboard("{Control>}k{/Control}");
     await screen.findByRole("dialog", { name: "Quick Launch" });
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Enter}");
 
     expect(openWorktreeInTerminal).toHaveBeenCalledWith("wt-1");
@@ -455,7 +455,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
@@ -474,7 +474,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
@@ -491,7 +491,7 @@ describe("App", () => {
     render(<App />);
 
     const option = await screen.findByRole("option", {
-      name: /feat\/risk-483/,
+      name: /feat\/auth-142/,
     });
     option.focus();
     await user.keyboard("{Alt>}a{/Alt}");
@@ -507,7 +507,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
@@ -530,7 +530,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));
@@ -549,7 +549,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     expect(screen.getAllByText("PID 4242").length).toBeGreaterThan(0);
@@ -560,7 +560,7 @@ describe("App", () => {
     const user = userEvent.setup();
     vi.mocked(getForestState).mockResolvedValue(nativeState);
     vi.mocked(listWorktrees).mockResolvedValue([
-      sampleWorktree({ id: "wt-1", branch: "feat/risk-483" }),
+      sampleWorktree({ id: "wt-1", branch: "feat/auth-142" }),
       sampleWorktree({
         id: "wt-2",
         name: "fix-report-export",
@@ -574,13 +574,13 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
     expect(screen.getByText("fix/report-export")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Agents" }));
 
-    expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+    expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     expect(screen.queryByText("fix/report-export")).not.toBeInTheDocument();
   });
 
@@ -595,7 +595,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
     expect(screen.queryByText("PID 4242")).not.toBeInTheDocument();
 
@@ -650,7 +650,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: "Agent monitor" }));
@@ -659,7 +659,7 @@ describe("App", () => {
     expect(screen.getByText("unknown")).toBeInTheDocument();
     expect(screen.getByText("PID 4242")).toBeInTheDocument();
     expect(
-      screen.getAllByText("EXOG App / feat/risk-483").length,
+      screen.getAllByText("Acme App / feat/auth-142").length,
     ).toBeGreaterThan(0);
   });
 
@@ -674,7 +674,7 @@ describe("App", () => {
     const sidebar = await screen.findByRole("complementary", {
       name: "Repositories",
     });
-    expect(within(sidebar).getByText("EXOG App")).toBeInTheDocument();
+    expect(within(sidebar).getByText("Acme App")).toBeInTheDocument();
     expect(listWorktrees).not.toHaveBeenCalled();
     expect(refreshWorktrees).not.toHaveBeenCalled();
   });
@@ -693,12 +693,12 @@ describe("App", () => {
     const sidebar = await screen.findByRole("complementary", {
       name: "Repositories",
     });
-    expect(within(sidebar).getByText("EXOG App")).toBeInTheDocument();
-    expect(screen.queryByText("feat/risk-483")).not.toBeInTheDocument();
+    expect(within(sidebar).getByText("Acme App")).toBeInTheDocument();
+    expect(screen.queryByText("feat/auth-142")).not.toBeInTheDocument();
 
     resolveReconcile(nativeState);
 
-    expect(await screen.findByText("feat/risk-483")).toBeInTheDocument();
+    expect(await screen.findByText("feat/auth-142")).toBeInTheDocument();
   });
 
   it("offers Open Settings for a terminal_unavailable error", async () => {
@@ -712,7 +712,7 @@ describe("App", () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText("feat/risk-483")).toBeInTheDocument();
+      expect(screen.getByText("feat/auth-142")).toBeInTheDocument();
     });
 
     const cockpit = within(screen.getByRole("listbox", { name: "Worktrees" }));

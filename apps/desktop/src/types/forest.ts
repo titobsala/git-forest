@@ -371,9 +371,9 @@ export function sampleWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
     id: "wt-1",
     repositoryId: "repo-1",
-    name: "feat-risk-483",
-    path: "/tmp/forest/worktrees/exog-app/feat-risk-483",
-    branch: "feat/risk-483",
+    name: "feat-auth-142",
+    path: "/tmp/forest/worktrees/acme-app/feat-auth-142",
+    branch: "feat/auth-142",
     head: "abcdef",
     detached: false,
     locked: false,
@@ -401,11 +401,11 @@ export function sampleRepository(
 ): Repository {
   return {
     id: "repo-1",
-    name: "EXOG App",
-    path: "/tmp/exog-app",
+    name: "Acme App",
+    path: "/tmp/acme-app",
     mode: "linked",
     primaryBranch: "main",
-    remoteUrl: "https://example.test/exog.git",
+    remoteUrl: "https://example.test/acme.git",
     lastRefreshedAt: "2026-08-20T09:00:00Z",
     health: "available",
     healthDetail: null,

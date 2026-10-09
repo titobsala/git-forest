@@ -4,8 +4,8 @@ import { buildResults } from "./results";
 
 const repository = sampleRepository({
   id: "repo-1",
-  name: "EXOG App",
-  path: "/tmp/exog-app",
+  name: "Acme App",
+  path: "/tmp/acme-app",
 });
 const other = sampleRepository({
   id: "repo-2",
@@ -18,9 +18,9 @@ const worktrees = [
     repository,
     worktree: sampleWorktree({
       id: "wt-1",
-      name: "feat-risk-483",
-      branch: "feat/risk-483",
-      path: "/tmp/forest/exog-app/feat-risk-483",
+      name: "feat-auth-142",
+      branch: "feat/auth-142",
+      path: "/tmp/forest/acme-app/feat-auth-142",
     }),
   },
   {
@@ -43,11 +43,11 @@ describe("buildResults", () => {
   });
 
   it("labels worktrees with their repository", () => {
-    const results = buildResults([repository, other], worktrees, "risk-483");
+    const results = buildResults([repository, other], worktrees, "auth-142");
 
     expect(results).toHaveLength(1);
     expect(results[0]?.kind).toBe("worktree");
-    expect(results[0]?.title).toBe("EXOG App / feat/risk-483");
+    expect(results[0]?.title).toBe("Acme App / feat/auth-142");
     expect(results[0]?.worktree?.id).toBe("wt-1");
   });
 
@@ -59,7 +59,7 @@ describe("buildResults", () => {
   });
 
   it("ranks a repository whose name prefixes the query above its worktrees", () => {
-    const results = buildResults([repository, other], worktrees, "exog");
+    const results = buildResults([repository, other], worktrees, "acme");
 
     expect(results[0]?.kind).toBe("repository");
     expect(results[0]?.repository.id).toBe("repo-1");
@@ -123,8 +123,8 @@ describe("buildResults", () => {
         repository,
         worktree: sampleWorktree({
           id: "wt-older",
-          name: "feat-risk",
-          branch: "feat/risk-a",
+          name: "feat-auth",
+          branch: "feat/auth-a",
           path: "/tmp/a",
           lastUsedAt: "2026-08-20T09:00:00Z",
         }),
@@ -133,15 +133,15 @@ describe("buildResults", () => {
         repository,
         worktree: sampleWorktree({
           id: "wt-newer",
-          name: "feat-risk",
-          branch: "feat/risk-b",
+          name: "feat-auth",
+          branch: "feat/auth-b",
           path: "/tmp/b",
           lastUsedAt: "2026-08-25T10:00:00Z",
         }),
       },
     ];
 
-    const results = buildResults([repository], tied, "feat/risk");
+    const results = buildResults([repository], tied, "feat/auth");
 
     expect(results.map((result) => result.worktree?.id)).toEqual([
       "wt-newer",
@@ -155,8 +155,8 @@ describe("buildResults", () => {
         repository,
         worktree: sampleWorktree({
           id: "wt-unused",
-          name: "feat-risk",
-          branch: "feat/risk-x",
+          name: "feat-auth",
+          branch: "feat/auth-x",
           path: "/tmp/x",
           lastUsedAt: null,
         }),
@@ -165,15 +165,15 @@ describe("buildResults", () => {
         repository,
         worktree: sampleWorktree({
           id: "wt-used",
-          name: "feat-risk",
-          branch: "feat/risk-y",
+          name: "feat-auth",
+          branch: "feat/auth-y",
           path: "/tmp/y",
           lastUsedAt: "2026-08-25T10:00:00Z",
         }),
       },
     ];
 
-    const results = buildResults([repository], mixed, "feat/risk");
+    const results = buildResults([repository], mixed, "feat/auth");
 
     expect(results.map((result) => result.worktree?.id)).toEqual([
       "wt-used",
