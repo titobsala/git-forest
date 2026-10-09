@@ -88,7 +88,7 @@ The product model is:
 │
 ├── 🌲 Repository A
 │   ├── 🌿 main
-│   ├── 🌿 feat/risk-483
+│   ├── 🌿 feat/auth-142
 │   │   └── 🤖 Codex ●
 │   └── 🌿 fix/export
 │       └── 🤖 Claude ○
@@ -133,13 +133,13 @@ Super + W
 Then:
 
 ```text
-> risk-483
+> auth-142
 ```
 
 Git Forest immediately shows:
 
 ```text
-EXOG / feat/risk-483      Codex ●
+Acme / feat/auth-142      Codex ●
 ```
 
 From there the user can:
@@ -160,13 +160,13 @@ Super + W
 N
 
 Repository:
-EXOG
+Acme
 
 Base:
 main
 
 Branch:
-feat/risk-483
+feat/auth-142
 
 Agent:
 Codex
@@ -529,7 +529,7 @@ Located under Forest-controlled directories.
 Example:
 
 ```text
-~/forest/repos/exog-app
+~/forest/repos/acme-app
 ```
 
 ### Linked repository
@@ -539,7 +539,7 @@ Existing repository left where it already lives.
 Example:
 
 ```text
-~/Projects/exog-app
+~/Projects/acme-app
 ```
 
 ## Forest root
@@ -658,8 +658,8 @@ Example:
 
 ```text
 ~/Projects/
-├── exog-app/.git
-├── exog-api/.git
+├── acme-app/.git
+├── acme-api/.git
 ├── game/.git
 └── notes/
 ```
@@ -699,8 +699,8 @@ Git Forest
 
 Repositories
 
-EXOG App     ~/Projects/exog-app
-EXOG API     ~/Projects/exog-api
+Acme App     ~/Projects/acme-app
+Acme API     ~/Projects/acme-api
 Game         ~/Projects/game
 ```
 
@@ -747,7 +747,7 @@ Display:
 
 ```text
 main
-feat/risk-483
+feat/auth-142
 fix/report-export
 ```
 
@@ -795,7 +795,7 @@ Default location for managed worktrees:
 Example:
 
 ```text
-~/forest/worktrees/exog-app-a1b2c3d4/feat-risk-483
+~/forest/worktrees/acme-app-a1b2c3d4/feat-auth-142
 ```
 
 The repository id is appended so two indexed repositories with the same display name keep isolated worktree directories. The Git branch name is left unchanged; only the directory slug is normalized.
@@ -1041,7 +1041,7 @@ Example conceptual result:
 
 ```text
 cwd:
-~/forest/worktrees/exog-app/risk-483
+~/forest/worktrees/acme-app/auth-142
 
 command:
 codex
@@ -1126,8 +1126,8 @@ Example:
 ┌─────────────────────────────────────────────┐
 │ 🌳 Search Git Forest...                    │
 ├─────────────────────────────────────────────┤
-│ EXOG / feat/risk-483           Codex ●     │
-│ EXOG / main                    idle        │
+│ Acme / feat/auth-142           Codex ●     │
+│ Acme / main                    idle        │
 │ Game / feat-map                OpenCode ●  │
 └─────────────────────────────────────────────┘
 ```
@@ -1254,9 +1254,9 @@ mark running/exited/unknown
 Example:
 
 ```text
-EXOG / feat/risk-483
+Acme / feat/auth-142
 
-Branch   feat/risk-483
+Branch   feat/auth-142
 Status   Dirty
 Agent    Codex ● Running
 Started  recently
@@ -1356,7 +1356,7 @@ Example:
 ```text
 Remove worktree?
 
-feat/risk-483 has:
+feat/auth-142 has:
 • 3 modified files
 • 1 untracked file
 
@@ -1493,10 +1493,10 @@ Potential structure:
 ┌─────────────────────────────────────────────────────┐
 │ Git Forest                                  Search │
 ├───────────────┬─────────────────────────────────────┤
-│ Repositories  │ EXOG APP                            │
+│ Repositories  │ ACME APP                            │
 │               │                                     │
-│ EXOG App      │ main                    clean       │
-│ EXOG API      │ ├─ feat/risk-483        Codex ●    │
+│ Acme App      │ main                    clean       │
+│ Acme API      │ ├─ feat/auth-142        Codex ●    │
 │ Game          │ ├─ feat/report          dirty       │
 │               │ └─ fix/navigation       idle        │
 │               │                                     │
@@ -1524,7 +1524,7 @@ terminal status where known
 Example:
 
 ```text
-EXOG APP
+ACME APP
 
 4 worktrees
 2 running agents
@@ -1580,7 +1580,7 @@ Show Cockpit
 Typing:
 
 ```text
-> risk-483
+> auth-142
 ```
 
 selects context.
@@ -1593,8 +1593,8 @@ Support conceptual queries such as:
 
 ```text
 > new worktree
-> open exog
-> agent risk-483
+> open acme
+> agent auth-142
 ```
 
 This does not need natural-language AI.
@@ -2125,7 +2125,7 @@ It is not yet the full long-term agent orchestration platform.
 ## Required User Story 1 — Existing Repository
 
 ```text
-I have ~/Projects/exog-app.
+I have ~/Projects/acme-app.
 
 I install Forest.
 
@@ -2144,13 +2144,13 @@ Super + W
 N
 
 Repository:
-EXOG App
+Acme App
 
 Base:
 main
 
 Branch:
-feat/risk-483
+feat/auth-142
 
 Agent:
 Codex
@@ -2161,7 +2161,7 @@ Create
 Forest creates:
 
 ```text
-~/forest/worktrees/exog-app/feat-risk-483
+~/forest/worktrees/acme-app/feat-auth-142
 ```
 
 ---
@@ -2173,7 +2173,7 @@ Forest opens:
 ```text
 Warp
 └── new tab
-    └── cwd: feat-risk-483
+    └── cwd: feat-auth-142
         └── Codex
 ```
 
@@ -2186,8 +2186,8 @@ If Warp is already open, reuse its tab workflow rather than unnecessarily creati
 Forest can simultaneously represent:
 
 ```text
-EXOG
-├── feat/risk-483       Codex ●
+Acme
+├── feat/auth-142       Codex ●
 ├── feat/report         Claude ●
 ├── fix/navigation      OpenCode ●
 └── main                idle
@@ -2216,7 +2216,7 @@ which worktrees are dirty
 When the user finishes work:
 
 ```text
-Remove feat/risk-483
+Remove feat/auth-142
 ```
 
 Forest verifies safety.
@@ -2374,9 +2374,9 @@ checkout PR
 Possible cockpit:
 
 ```text
-feat/risk-483
+feat/auth-142
 Codex ●
-PR #483
+PR #142
 CI ✓
 2 reviews
 ```
@@ -2402,10 +2402,10 @@ PR
 Potential creation:
 
 ```text
-Select ENG-483
+Select ENG-142
        ↓
 Forest proposes
-feat/eng-483-risk-dashboard
+feat/eng-142-auth-dashboard
        ↓
 create worktree
        ↓
@@ -2547,7 +2547,7 @@ Potential visualization:
                         │
           ┌─────────────┼──────────────┐
           │             │              │
-      RISK-483      REPORT-121      NAV-44
+      AUTH-142      REPORT-121      NAV-44
        Codex ●        Claude ●       idle
           │             │
        PR #981        dirty
@@ -2789,12 +2789,12 @@ A future Forest might look like:
 ```text
 Git Forest
 
-EXOG
-├── RISK-483
-│   ├── Worktree          feat/risk-483
+Acme
+├── AUTH-142
+│   ├── Worktree          feat/auth-142
 │   ├── Agent             Codex / GPT-X ●
 │   ├── Environment       Railway
-│   ├── Issue             Linear RISK-483
+│   ├── Issue             Linear AUTH-142
 │   ├── PR                #981
 │   └── CI                ✓
 │

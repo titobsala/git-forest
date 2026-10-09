@@ -1,0 +1,119 @@
+name: Release
+
+# Push a tag like v0.2.0 (matching Cargo.toml) to build Linux packages and
+# open a draft GitHub Release. Review the draft, then publish it by hand.
+# To rebuild an existing tag, run this workflow manually and pick the tag in
+# "Use workflow from".
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Checks
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    uses: ./.github/workflows/ci.yml
+
+  linux:
+    name: Linux packages
+    needs: checks
+    # Build on the oldest supported Ubuntu: AppImages and .debs only run on
+    # systems with a glibc at least as new as the one they were built against.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      BUNDLE_DIR: apps/desktop/src-tauri/target/release/bundle
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.12"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify tag matches the app version
+        run: |
+          # --locked also fails if Cargo.lock was not refreshed after a bump.
+          version=$(cargo metadata --locked --format-version 1 \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            | jq -r '.packages[] | select(.name == "git-forest") | .version')
+          if [ "v${version}" != "${TAG}" ]; then
+            echo "::error::Tag ${TAG} does not match Cargo.toml version ${version}"
+            exit 1
+          fi
+          echo "Releasing Git Forest ${version}"
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          shared-key: git-forest-release
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            pkg-config \
+            libssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release
+          cp "${BUNDLE_DIR}"/appimage/*.AppImage \
+             "${BUNDLE_DIR}"/deb/*.deb \
+             "${BUNDLE_DIR}"/rpm/*.rpm \
+             release/
+          cd release
+          # Tauri names bundles after productName ("Git Forest"); GitHub would
+          # turn the space into a dot, so use the package name instead.
+          for file in Git\ Forest*; do
+            mv -- "${file}" "git-forest${file#Git Forest}"
+          done
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            gh release upload "${TAG}" release/* --clobber
+          else
+            gh release create "${TAG}" release/* \
+              --draft \
+              --verify-tag \
+              --generate-notes \
+              --title "Git Forest ${TAG}"
+          fi

@@ -60,12 +60,12 @@ describe("ScanRepositoriesPanel", () => {
       scanId: "scan-1",
       directoriesVisited: 3,
       candidatesFound: 1,
-      currentPath: "/tmp/projects/exog-app",
+      currentPath: "/tmp/projects/acme-app",
       warnings: [],
       cancelled: false,
     });
     expect(
-      await screen.findByText(/Scanning \/tmp\/projects\/exog-app/),
+      await screen.findByText(/Scanning \/tmp\/projects\/acme-app/),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel scan" }));
@@ -80,8 +80,8 @@ describe("ScanRepositoriesPanel", () => {
       warnings: ["unreadable /tmp/projects/secret"],
       candidates: [
         {
-          path: "/tmp/projects/exog-app",
-          name: "exog-app",
+          path: "/tmp/projects/acme-app",
+          name: "acme-app",
           primaryBranch: "main",
           remoteUrl: null,
           alreadyIndexed: false,
@@ -104,7 +104,7 @@ describe("ScanRepositoriesPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Import selected" }));
     await waitFor(() => {
-      expect(onImport).toHaveBeenCalledWith(["/tmp/projects/exog-app"]);
+      expect(onImport).toHaveBeenCalledWith(["/tmp/projects/acme-app"]);
     });
   });
   it("does not restore a scan ID that completed before start returned", async () => {

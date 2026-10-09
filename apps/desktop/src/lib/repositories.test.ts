@@ -28,21 +28,21 @@ describe("repository commands", () => {
     vi.mocked(invokeCommand).mockResolvedValue({ repositories: [] });
 
     await importRepository({
-      name: "EXOG App",
-      path: "/tmp/exog-app",
+      name: "Acme App",
+      path: "/tmp/acme-app",
     });
 
     expect(invokeCommand).toHaveBeenCalledWith("import_repository", {
-      name: "EXOG App",
-      path: "/tmp/exog-app",
+      name: "Acme App",
+      path: "/tmp/acme-app",
     });
   });
 
   it("invokes import_repositories, refresh, and remove", async () => {
     vi.mocked(invokeCommand).mockResolvedValue({ imported: [] });
-    await importRepositories(["/tmp/exog-app"]);
+    await importRepositories(["/tmp/acme-app"]);
     expect(invokeCommand).toHaveBeenCalledWith("import_repositories", {
-      paths: ["/tmp/exog-app"],
+      paths: ["/tmp/acme-app"],
     });
 
     await refreshRepository("repo-1");

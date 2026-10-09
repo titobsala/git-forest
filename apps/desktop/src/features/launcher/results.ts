@@ -15,7 +15,7 @@ export type LaunchResultKind = "repository" | "worktree";
 export interface LaunchResult {
   id: string;
   kind: LaunchResultKind;
-  /** Primary line, e.g. `EXOG App / feat/risk-483`. */
+  /** Primary line, e.g. `Acme App / feat/auth-142`. */
   title: string;
   /** Secondary monospace line: the filesystem path. */
   subtitle: string;

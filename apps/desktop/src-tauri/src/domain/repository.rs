@@ -89,11 +89,11 @@ mod tests {
     fn repository_serializes_camel_case_json_for_the_frontend() {
         let repository = Repository {
             id: RepositoryId::from_string("repo-1"),
-            name: "EXOG App".to_owned(),
-            path: PathBuf::from("/tmp/exog-app"),
+            name: "Acme App".to_owned(),
+            path: PathBuf::from("/tmp/acme-app"),
             mode: RepositoryMode::Linked,
             primary_branch: Some("main".to_owned()),
-            remote_url: Some("https://example.test/exog.git".to_owned()),
+            remote_url: Some("https://example.test/acme.git".to_owned()),
             last_refreshed_at: Some(Utc.with_ymd_and_hms(2026, 8, 20, 9, 0, 0).unwrap()),
             health: RepositoryHealth::Available,
             health_detail: None,
@@ -104,11 +104,11 @@ mod tests {
 
         let json = serde_json::to_value(&repository).expect("serialize");
         assert_eq!(json["id"], "repo-1");
-        assert_eq!(json["name"], "EXOG App");
-        assert_eq!(json["path"], "/tmp/exog-app");
+        assert_eq!(json["name"], "Acme App");
+        assert_eq!(json["path"], "/tmp/acme-app");
         assert_eq!(json["mode"], "linked");
         assert_eq!(json["primaryBranch"], "main");
-        assert_eq!(json["remoteUrl"], "https://example.test/exog.git");
+        assert_eq!(json["remoteUrl"], "https://example.test/acme.git");
         assert_eq!(json["health"], "available");
         assert_eq!(json["healthDetail"], serde_json::Value::Null);
         assert!(json.get("lastRefreshedAt").is_some());

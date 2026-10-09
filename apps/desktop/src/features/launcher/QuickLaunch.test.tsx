@@ -6,7 +6,7 @@ import { QuickLaunch } from "./QuickLaunch";
 import { buildCommands, type CommandActions } from "./commands";
 import type { ActionContext } from "./actions";
 
-const repository = sampleRepository({ name: "EXOG App" });
+const repository = sampleRepository({ name: "Acme App" });
 const worktree = sampleWorktree();
 
 function setup(overrides: { actions?: Partial<CommandActions> } = {}) {
@@ -122,7 +122,7 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     setup();
 
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Tab}");
 
     expect(
@@ -136,7 +136,7 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     const { actionContext, onClose } = setup();
 
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Tab}");
     await user.keyboard("copy");
     await user.keyboard("{Enter}");
@@ -149,13 +149,13 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     setup();
 
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Tab}");
     expect(screen.getByRole("combobox")).toHaveValue("");
 
     await user.keyboard("{Shift>}{Tab}{/Shift}");
 
-    expect(screen.getByRole("combobox")).toHaveValue("risk-483");
+    expect(screen.getByRole("combobox")).toHaveValue("auth-142");
     expect(
       screen.getByRole("listbox", { name: "Results" }),
     ).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     const { onClose } = setup();
 
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Tab}");
 
     // App handles `overlay.close` on a window listener, so the submenu must
@@ -202,7 +202,7 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     const { onOpenWorktreeInTerminal, onOpenRepository, onClose } = setup();
 
-    await user.keyboard("risk-483");
+    await user.keyboard("auth-142");
     await user.keyboard("{Enter}");
 
     expect(onOpenWorktreeInTerminal).toHaveBeenCalledWith(worktree, repository);
@@ -214,7 +214,7 @@ describe("QuickLaunch", () => {
     const user = userEvent.setup();
     const { onOpenRepository, onOpenWorktreeInTerminal, onClose } = setup();
 
-    await user.keyboard("tmp/exog-app");
+    await user.keyboard("tmp/acme-app");
     await user.keyboard("{Enter}");
 
     expect(onOpenRepository).toHaveBeenCalledWith(repository);

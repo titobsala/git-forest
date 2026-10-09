@@ -3,7 +3,7 @@ import { NO_MATCH, score } from "./score";
 
 describe("score", () => {
   it("reports no match when the needle is absent", () => {
-    expect(score("feat/risk-483", "zzz")).toBe(NO_MATCH);
+    expect(score("feat/auth-142", "zzz")).toBe(NO_MATCH);
   });
 
   it("ranks a prefix match above an interior one", () => {

@@ -194,14 +194,14 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("repo");
         db.connection()
             .execute(
                 "INSERT INTO worktrees (id, repository_id, name, path, branch, created_at, updated_at)
-                 VALUES ('wt-1', 'repo-1', 'feat-risk-483', '/tmp/feat-risk-483', 'feat/risk-483', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('wt-1', 'repo-1', 'feat-auth-142', '/tmp/feat-auth-142', 'feat/auth-142', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("worktree");

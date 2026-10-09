@@ -28,17 +28,17 @@ describe("RepositoryBrowser", () => {
       />,
     );
 
-    expect(screen.getByText("EXOG App")).toBeInTheDocument();
+    expect(screen.getByText("Acme App")).toBeInTheDocument();
     expect(screen.getByText("Game")).toBeInTheDocument();
-    expect(screen.getByText("/tmp/exog-app")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/acme-app")).toBeInTheDocument();
     expect(
-      screen.getByText(/https:\/\/example.test\/exog.git/),
+      screen.getByText(/https:\/\/example.test\/acme.git/),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "game develop" },
     });
-    expect(screen.queryByText("EXOG App")).not.toBeInTheDocument();
+    expect(screen.queryByText("Acme App")).not.toBeInTheDocument();
     expect(screen.getByText("Game")).toBeInTheDocument();
   });
 

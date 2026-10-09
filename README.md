@@ -1,180 +1,186 @@
+<div align="center">
+
+<img src="apps/desktop/src-tauri/icons/128x128.png" width="96" alt="Git Forest logo" />
+
 # Git Forest
 
-Keyboard-first desktop control plane for Git worktrees and coding-agent sessions.
+**Keyboard-first desktop control plane for Git worktrees and CLI coding agents.**
 
-Git Forest is **not** a full Git client, IDE, or terminal. It connects repositories, worktrees, terminals, and CLI coding agents so a developer can move between isolated workspaces quickly.
+[![CI](https://github.com/titobsala/git-forest/actions/workflows/ci.yml/badge.svg)](https://github.com/titobsala/git-forest/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational)
+![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB)
+![Rust](https://img.shields.io/badge/Rust-core-B7410E)
+![React 19](https://img.shields.io/badge/React-19-61DAFB)
 
-This repository is at **Release 0.1.1** — a local Linux internal alpha. It can index local Git repositories, survive missing, moved, invalid, or unavailable checkouts, create, inspect, and safely remove Git worktrees, fetch remote-tracking refs on demand and create a new local tracking branch in a Forest-managed worktree, preview and run metadata cleanup, open a worktree in Warp, launch Codex, Claude Code, or OpenCode, invoke Quick Launch from anywhere with `Super + W`, and track those agent sessions against Linux `/proc`. 0.0.9 was an internal safety gate and is not a separately versioned package.
+</div>
 
-## Prerequisites
+![Git Forest cockpit showing four repositories, their worktrees, dirty state, ahead/behind drift, and running agent sessions](docs/screenshots/cockpit.png)
 
-The 0.1.1 desktop app targets **Linux** first.
+Running several coding agents in parallel means juggling many isolated checkouts: one worktree per task, each with its own terminal and its own agent. Git Forest keeps track of all of them. From one keyboard-driven window you can find any repository or worktree, create a new isolated worktree from a local or remote branch, open it in your terminal, launch Codex, Claude Code, or OpenCode inside it, see which agents are still running, and safely clean up when the work is done.
 
-You need:
+Git Forest is **not** a Git client, IDE, or terminal. It is the layer that connects them.
 
-- [Bun](https://bun.sh) (JavaScript toolchain)
-- [Rust](https://rustup.rs) via `rustup` (`rustc`, `cargo`, `clippy`, `rustfmt`)
-- System Git
-- Tauri 2 native libraries
+## Features
 
-On Ubuntu 24.04:
+- **Quick Launch from anywhere.** `Super + W` summons a fuzzy launcher over every indexed repository and worktree, ranked by recent use. `Enter` opens the worktree in your terminal.
+- **Worktree lifecycle.** Create a worktree on a new branch from any local or remote-tracking ref, with optional copying of ignored `.env` files. Remove it with a safety preview that blocks on uncommitted changes, untracked files, or running agents.
+- **Agent sessions.** Launch a CLI coding agent in a worktree with `⌥ A`. Forest tracks each session against Linux `/proc`, survives restarts, and never shows stale state as live.
+- **Works with your existing repositories.** Link repositories where they already live, or scan a folder to import many at once. Forest never moves your code, and it tolerates `git worktree add/remove` done outside the app.
+- **Resilient by design.** Missing, moved, or invalid checkouts are detected and can be relocated. A maintenance view previews and prunes stale metadata without touching present directories.
+- **Light and dark themes**, a dense cockpit view, and an inspector for per-worktree telemetry.
 
-```bash
-curl -fsSL https://bun.sh/install | bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/quick-launch.png" alt="Quick Launch overlay searching repositories and worktrees" /></td>
+    <td width="50%"><img src="docs/screenshots/create-worktree.png" alt="Create worktree dialog with base ref, branch name, agent, and env file copy" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Quick Launch</b>: fuzzy search across every worktree</td>
+    <td align="center"><b>New worktree</b>: branch from local or remote refs, launch an agent</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/agents.png" alt="Agent monitor listing configured agents and running sessions" /></td>
+    <td width="50%"><img src="docs/screenshots/cockpit-light.png" alt="Cockpit view in the light theme" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Agent monitor</b>: live and finished sessions</td>
+    <td align="center"><b>Light theme</b></td>
+  </tr>
+</table>
 
-sudo apt update
-sudo apt install \
-  build-essential \
-  curl \
-  wget \
-  file \
-  pkg-config \
-  libssl-dev \
-  libgtk-3-dev \
-  libwebkit2gtk-4.1-dev \
-  libayatana-appindicator3-dev \
-  librsvg2-dev \
-  libxdo-dev
+## Keyboard
+
+| Shortcut                | Action                                      |
+| ----------------------- | ------------------------------------------- |
+| `Super + W`             | Show/hide Quick Launch from any application |
+| `Ctrl + K`              | Toggle Quick Launch while Forest is focused |
+| `↑` / `↓`               | Move through worktrees                      |
+| `Enter`                 | Open the selected worktree in the terminal  |
+| `⌥ A`                   | Launch the default coding agent in it       |
+| `Tab` (in Quick Launch) | Show actions for the highlighted result     |
+| `Tab` / `Shift + Tab`   | Toggle the repositories sidebar / inspector |
+| `Ctrl + O`              | Back to the cockpit                         |
+| `Esc`                   | Close the active overlay                    |
+
+## Status
+
+Git Forest is an **early alpha (0.1.1)**, Linux-first. Current scope:
+
+- **Platform:** Linux. The architecture keeps OS-specific code behind adapters for a later macOS/Windows port.
+- **Terminal:** [Warp](https://www.warp.dev/). Other terminals plug in behind the same `TerminalProvider` interface.
+- **Agents:** Codex, Claude Code, and OpenCode built in; Cursor CLI is detected. Custom agents are planned.
+- **Repositories:** new imports are linked in place. Worktrees always start on a new branch.
+
+See [ROADMAP.md](ROADMAP.md) for what comes next.
+
+## Architecture
+
+```text
+┌──────────────────────────────┐
+│  React 19 UI (TypeScript)    │   presents state, never runs commands
+└──────────────┬───────────────┘
+               │ typed, intent-level Tauri commands
+               │ (create_worktree, launch_agent, …)
+┌──────────────▼───────────────┐
+│  Forest core (Rust)          │   domain services, safety checks, reconciliation
+└───┬──────────┬──────────┬────┘
+    │          │          │
+   Git      SQLite     OS / processes
+  (CLI)    (metadata)  (/proc, terminal & agent adapters)
 ```
 
-Confirm `~/.cargo/bin` is on your `PATH` (the rustup installer usually appends this in `~/.cargo/env`).
+Some deliberate choices:
 
-## Setup
+- **The UI is a client.** Every privileged action goes through a narrow Rust command. There is no shell plugin and no generic `run_command` exposed to the webview.
+- **Git stays authoritative.** Forest runs the user's own `git` with porcelain output, so hooks, credentials, and worktree semantics match the command line exactly.
+- **No shell-string building.** Paths and branch names are always passed as separate arguments. The one place a command string is required (Warp tab configs) goes through a small, tested POSIX quoting encoder.
+- **Persisted state is never trusted blindly.** Repositories, worktrees, and agent sessions are reconciled against the filesystem, Git, and `/proc` on startup and refresh. PID reuse is detected through process start ticks.
+- **Adapters at the edges.** Terminals (`TerminalProvider`) and coding agents (`AgentRunner`) are trait boundaries, so adding Ghostty or a new agent doesn't touch worktree logic.
+
+The reasoning behind these is recorded in [`docs/decisions/`](docs/decisions/).
+
+## Getting started
+
+### Download
+
+Prebuilt x86_64 Linux packages are attached to each [GitHub Release](https://github.com/titobsala/git-forest/releases/latest):
+
+| Package     | For                                  |
+| ----------- | ------------------------------------ |
+| `.AppImage` | Any distribution: `chmod +x` and run |
+| `.deb`      | Debian, Ubuntu, and derivatives      |
+| `.rpm`      | Fedora, openSUSE, and derivatives    |
+
+You also need Git, and [Warp](https://www.warp.dev/) to open worktrees and launch agents. Checksums are in `SHA256SUMS.txt`.
+
+### Build from source
+
+Prerequisites:
+
+- [Bun](https://bun.sh)
+- [Rust](https://rustup.rs) (stable, with `clippy` and `rustfmt`)
+- Git
+- [Warp](https://www.warp.dev/) to open worktrees and launch agents
+- Tauri 2 system libraries. On Ubuntu 24.04:
 
 ```bash
-git clone git@github.com:titobsala/git-forest.git
+sudo apt install build-essential curl wget file pkg-config libssl-dev \
+  libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+  librsvg2-dev libxdo-dev
+```
+
+Then:
+
+```bash
+git clone https://github.com/titobsala/git-forest.git
 cd git-forest
 bun install
-bun run dev
+bun run dev        # development app with hot reload
+bun run build      # production build
 ```
 
-That opens the Git Forest window:
+Forest stores its metadata in `~/.local/share/dev.gitforest.desktop/`. New worktrees go under `~/forest/worktrees/<repository>-<id>/<branch>`. Linking or removing a repository never moves or deletes your files.
 
-```text
-Git Forest
-
-Version 0.1.1
-
-Worktrees in reach.
-```
-
-The window shows Forest status and configuration, then lets you:
-
-- link an existing Git repository (directory picker or path);
-- scan a folder with live progress and cancellation, then import selected candidates;
-- search indexed repositories by name, path, branch, or remote;
-- refresh Git metadata and remove a repository from the Forest index only;
-- select a repository to list worktrees, create a new-branch worktree from a local or cached remote-tracking ref (optionally copying ignored root `.env` files from the indexed repository), and remove one after a safety preview;
-- open a selected worktree in Warp (new tab by default, or a new window from Settings);
-- launch the configured default agent (Codex, Claude Code, or OpenCode) in that worktree, then see the session on the cockpit badge, Agents filter, monitor, and tray;
-- invoke Quick Launch with `Super + W` (or `Ctrl/Cmd + K` while Forest is focused), search repositories and worktrees, and open a worktree in Warp with Enter.
-
-Restarting the app keeps that index. Schema version 5 adds cached repository `health`, `health_detail`, and `last_reconciled_at` (existing rows migrate to `unknown`). Schema version 4 adds `agent_sessions.process_start_ticks` so a reused PID is not treated as the original process. Schema version 3 adds `worktrees.last_used_at` for launcher recency without dropping earlier rows. Schema version 2 added repository metadata (`primary_branch`, `remote_url`, `last_refreshed_at`).
-
-Forest metadata lives in the OS application-data directory (`~/.local/share/dev.gitforest.desktop/` on Linux), not inside `~/forest`. The default Forest root is `~/forest`, with `repos/` and `worktrees/` created on first launch. Linking a repository does not move it. New worktrees are created under `~/forest/worktrees/<repository-slug>-<repository-id>/<worktree-slug>`, so repositories with the same name remain isolated. Removing a repository or a clean worktree never deletes Git branches. Worktrees with tracked or untracked changes require an explicit force action. Ignored-only worktrees warn that those local files will be deleted, then use ordinary removal. Create Worktree can copy ignored root-level `.env` family files from the indexed repository root; the copy is on by default when candidates exist and can be turned off.
-
-Limitations in this release:
-
-- new imports are Linked only (existing Managed records still load);
-- worktree creation always makes a new local branch (no attach-existing-branch yet); a selected remote base creates a tracking branch from that cached remote-tracking ref;
-- Fetch remotes is explicit and updates refs only — it does not merge, rebase, pull, or change checkout files, and it may fail when non-interactive Git credentials are unavailable;
-- primary, locked, missing, Git-unknown, and status-unavailable worktrees cannot be ordinarily removed;
-- a missing repository is shown as “Missing or moved” and must be located by the user — Forest does not scan the filesystem for it;
-- cleanup is metadata/artifact maintenance: it never deletes a present worktree directory or a foreign Warp file;
-- Warp is the only terminal provider;
-- if `Super + W` is already taken by the desktop environment, Forest logs a warning and `Ctrl/Cmd + K` still toggles Quick Launch;
-- agent session status is approximate (a Warp URI launch may be `unknown` when `/proc` never shows a matching process);
-- custom-agent management and generic `WorkspaceSession` (terminal/editor activity) are not implemented.
-
-The desktop capability set is `core:default`, `dialog:allow-open` for native directory pickers, `log:default` for rolling local logs, and narrow window show/hide/focus permissions for the global launcher. `Super + W` is registered in Rust; the UI never receives a generic shortcut or shell command.
-
-JavaScript packages are managed with **Bun only**. Do not add npm, yarn, or pnpm lockfiles.
-
-## Manual smoke
-
-Use a disposable Git repository with an initial `main` commit. Never use a developer repository for destructive scenarios.
-
-After `bun run dev`:
-
-Remote branch worktrees (0.1.1):
-
-1. Link a repository that already has modified and untracked files; confirm those files remain untouched after linking.
-2. Open Create worktree; confirm the dialog lists cached local and remote-tracking refs and does not fetch until you choose Fetch remotes.
-3. From another clone, push a new branch. Activate Fetch remotes, then select `origin/<branch>` as the base.
-4. Create the worktree and confirm Git created a new local branch that tracks the selected remote branch (`branch.<name>.remote` / `merge`).
-5. Confirm ignored root `.env` copy and optional agent launch still work, including Launch anyway / Retry launch without creating a second worktree.
-6. Confirm the dirty primary checkout is unchanged after fetch and create.
-
-Existing alpha smoke:
-
-1. Link a nested path inside an existing Git repository; the indexed path should be the repository root.
-2. Scan a folder, cancel mid-scan, then scan again and import selected candidates.
-3. Search by name, path, branch, or remote; refresh metadata; restart and confirm the index remains.
-4. Remove a repository from Forest and confirm the directory is still on disk.
-5. In a disposable repo, ignore `.env`, `.env.local`, `.env.development`, `.env.development.local`, and an unrelated `.cache`. Create a worktree and confirm the Copy local environment files checkbox lists those env names (not `.cache`), defaults on, and can be unchecked. Create once with copying enabled and once disabled; confirm the exact copied set, independent edits, and that names appear without contents. If copy fails, Launch anyway must not create a second worktree. After a successful copy, the selected agent launches; unavailable agents stay visible but disabled as Missing.
-6. Ignored-only worktrees warn that N ignored local files will be deleted and use ordinary Remove worktree. A true untracked or dirty worktree still requires Force remove; the branch is kept. Status-unavailable and Git-unknown rows omit ordinary remove.
-7. With Warp installed, open a worktree from the cockpit (`Enter` or the row action) and confirm a tab opens at that path.
-8. With Codex, Claude Code, or OpenCode on `PATH`, launch the default agent (`⌥A` or the row action) and confirm Warp starts that command in the worktree. Settings should show Installed/Missing next to each built-in. If launch fails after create, Retry launch must not create a second worktree.
-9. Press `Super + W` from another app while Forest is hidden: the window appears, Quick Launch is open, and search is focused. Press it again: the overlay closes and the window hides. `Ctrl/Cmd + K` still toggles the overlay without hiding Forest.
-10. Search a worktree, press Enter, confirm Warp opens at that path, then reopen Quick Launch with an empty query and confirm that worktree ranks above unused ones.
-11. Launch two agents in one worktree: the row shows one primary badge, the monitor lists both, and the tray/Agents filter count active sessions. Terminate one process, wait up to ten seconds (or hide and show Forest), and confirm reconciliation. Restart Forest and confirm sessions are `running`, `exited`, or `unknown`. Active sessions block worktree removal; exited/unknown sessions do not.
-12. Move a linked repository, confirm Forest shows “Missing or moved”, then Locate it with the directory picker and confirm worktrees return. Do not expect Forest to scan the disk for it.
-13. In Settings → Maintenance, preview cleanup, cancel with Escape, then execute selected categories. Confirm Git prune, stale Forest rows, exited/failed sessions, and generated `git-forest-*.toml` files are the only removals, and present directories plus foreign Warp files remain.
-
-## Commands
-
-From the repository root:
+## Development
 
 ```bash
-bun run dev           # Tauri + Vite desktop development
-bun run build         # production desktop build
-bun run test          # frontend tests
+bun run test          # frontend tests (Vitest)
 bun run typecheck     # TypeScript
 bun run lint          # ESLint
-bun run format        # Prettier
-bun run format:check  # Prettier check
-bun run check:rust    # rustfmt, clippy, and cargo test
-bun run check         # frontend checks plus Rust checks
-bun run hooks:install # enable Git hooks for this clone
+bun run format:check  # Prettier
+bun run check:rust    # rustfmt, Clippy (-D warnings), cargo test
+bun run check         # everything above
 ```
 
-`bun install` also runs `prepare`, which points Git at [`.githooks/`](.githooks/). The pre-commit hook formats/lints staged frontend files and, when Rust files are staged, runs `rustfmt` and Clippy. Skip it with `git commit --no-verify` or `GIT_FOREST_SKIP_HOOKS=1`.
+`bun install` enables a pre-commit hook (`.githooks/`) that formats and lints staged files. CI runs the frontend checks, the Rust checks, and a full Tauri desktop build on every pull request. Pushing a version tag builds the release packages; see [releasing](docs/releasing.md).
 
-## CI
+Rust tests create throwaway Git repositories to exercise real worktree scenarios: dirty and untracked checkouts, detached HEAD, removed directories, externally created worktrees, and stale metadata. Desktop-only behavior is covered by the [manual QA checklist](docs/testing.md).
 
-GitHub Actions runs on pull requests, pushes to `main`, and manual dispatch:
-
-- Frontend: Prettier, ESLint, TypeScript, Vitest, Vite build
-- Rust: rustfmt, Clippy, `cargo test`
-- Desktop: production Tauri build after the other jobs pass
-
-See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
-Equivalent Cargo commands from `apps/desktop/src-tauri`:
-
-```bash
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-```
-
-## Layout
+### Project layout
 
 ```text
-git-forest/
-├── apps/desktop/          Tauri 2 + React 19 + Vite application
-├── packages/              reserved for later shared packages
-├── docs/                  architecture notes and ADRs
-├── tests/fixtures/        shared test fixtures
-├── AGENTS.md
-├── ROADMAP.md
-└── README.md
+apps/desktop/
+├── src/                 React UI: app shell, cockpit, launcher, agents, settings
+└── src-tauri/
+    ├── src/
+    │   ├── commands/    Tauri command boundary
+    │   ├── forest/      application services (repositories, worktrees, sessions, cleanup)
+    │   ├── domain/      domain types and typed errors
+    │   ├── git/         Git CLI runner and porcelain parsers
+    │   ├── terminals/   TerminalProvider + Warp adapter
+    │   ├── agents/      AgentRunner, detection, command encoding
+    │   ├── processes/   Linux /proc inspection
+    │   ├── persistence/ SQLite repositories
+    │   └── platform/    paths and global shortcut
+    └── migrations/      versioned SQL schema
+docs/                    design spec, decision records, QA checklist
 ```
 
-The desktop UI is a client. Privileged work (Git, filesystem, processes, persistence) belongs in the Rust core behind typed Tauri commands.
+### Working with AI coding agents
 
-## Roadmap
+This project is built with AI coding agents as collaborators. [AGENTS.md](AGENTS.md) holds the rules they follow: architecture boundaries, Git safety, security constraints, and testing expectations.
 
-See [ROADMAP.md](ROADMAP.md) for the full 1.0 plan. Contributor rules for humans and coding agents are in [AGENTS.md](AGENTS.md).
+## License
+
+[MIT](LICENSE) © Tito Sala

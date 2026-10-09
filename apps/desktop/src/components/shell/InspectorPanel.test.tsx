@@ -19,7 +19,7 @@ const previewMock = vi.mocked(getWorktreeRemovalPreview);
 const removeMock = vi.mocked(removeWorktree);
 
 const repository = sampleRepository();
-const first = sampleWorktree({ id: "wt-1", name: "feat-risk-483" });
+const first = sampleWorktree({ id: "wt-1", name: "feat-auth-142" });
 const second = sampleWorktree({ id: "wt-2", name: "fix-ledger-991" });
 
 function previewFor(worktree: Worktree): WorktreeRemovalPreview {
@@ -83,7 +83,7 @@ describe("InspectorPanel", () => {
     expect(
       screen.queryByRole("region", { name: "Remove worktree" }),
     ).toBeNull();
-    expect(screen.queryByText(/Remove feat-risk-483\?/)).toBeNull();
+    expect(screen.queryByText(/Remove feat-auth-142\?/)).toBeNull();
     // The panel stays usable for the newly selected worktree.
     expect(
       screen.getByRole("button", { name: "Remove worktree" }),

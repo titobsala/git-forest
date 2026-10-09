@@ -252,7 +252,7 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed repo");
@@ -263,9 +263,9 @@ mod tests {
         WorktreeRecord {
             id: WorktreeId::from_string("wt-1"),
             repository_id: RepositoryId::from_string("repo-1"),
-            name: "feat-risk-483".into(),
-            path: PathBuf::from("/tmp/feat-risk-483"),
-            branch: Some("feat/risk-483".into()),
+            name: "feat-auth-142".into(),
+            path: PathBuf::from("/tmp/feat-auth-142"),
+            branch: Some("feat/auth-142".into()),
             created_at: created,
             updated_at: created,
             last_used_at,

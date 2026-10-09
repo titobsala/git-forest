@@ -35,7 +35,7 @@ describe("AgentMonitorView", () => {
     expect(screen.getAllByText("Codex").length).toBeGreaterThan(0);
     expect(screen.getByText("running")).toBeInTheDocument();
     expect(screen.getByText("PID 4242")).toBeInTheDocument();
-    expect(screen.getAllByText("EXOG App / feat/risk-483")).toHaveLength(2);
+    expect(screen.getAllByText("Acme App / feat/auth-142")).toHaveLength(2);
     expect(screen.getByText("exited")).toBeInTheDocument();
   });
 

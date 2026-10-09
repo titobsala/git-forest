@@ -84,6 +84,9 @@ impl GitRunner {
             .arg("-c")
             .arg("core.quotepath=false")
             .args(args)
+            // Failures are classified by matching Git's English messages, so
+            // a translated locale must not change what stderr says.
+            .env("LC_ALL", "C")
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_OPTIONAL_LOCKS", "0")
             .env("GIT_PAGER", "cat")
@@ -187,6 +190,18 @@ mod tests {
         assert!(rendered.contains("--porcelain=v2"));
         assert!(!rendered.contains("sh -c"));
         assert!(!rendered.contains("bash -c"));
+    }
+
+    #[test]
+    fn forces_the_c_locale_so_stderr_classification_is_stable() {
+        let runner = GitRunner::new();
+        let command = runner.build(Path::new("/tmp"), &["status"]);
+        let lc_all = command
+            .get_envs()
+            .find(|(key, _)| *key == "LC_ALL")
+            .and_then(|(_, value)| value);
+
+        assert_eq!(lc_all, Some(std::ffi::OsStr::new("C")));
     }
 
     #[test]

@@ -126,7 +126,7 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed");
@@ -149,7 +149,7 @@ mod tests {
                 },
             )
             .expect("row");
-        assert_eq!(name, "EXOG App");
+        assert_eq!(name, "Acme App");
         assert_eq!(branch, None);
         assert_eq!(remote, None);
         assert_eq!(refreshed, None);
@@ -181,14 +181,14 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed repo");
         db.connection()
             .execute(
                 "INSERT INTO worktrees (id, repository_id, name, path, branch, created_at, updated_at)
-                 VALUES ('wt-1', 'repo-1', 'feat-risk-483', '/tmp/feat-risk-483', 'feat/risk-483', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('wt-1', 'repo-1', 'feat-auth-142', '/tmp/feat-auth-142', 'feat/auth-142', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed worktree");
@@ -210,8 +210,8 @@ mod tests {
                 },
             )
             .expect("row");
-        assert_eq!(name, "feat-risk-483");
-        assert_eq!(branch.as_deref(), Some("feat/risk-483"));
+        assert_eq!(name, "feat-auth-142");
+        assert_eq!(branch.as_deref(), Some("feat/auth-142"));
         assert_eq!(last_used, None);
         let _ = std::fs::remove_dir_all(root);
     }
@@ -243,14 +243,14 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed repo");
         db.connection()
             .execute(
                 "INSERT INTO worktrees (id, repository_id, name, path, branch, created_at, updated_at)
-                 VALUES ('wt-1', 'repo-1', 'feat-risk-483', '/tmp/feat-risk-483', 'feat/risk-483', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('wt-1', 'repo-1', 'feat-auth-142', '/tmp/feat-auth-142', 'feat/auth-142', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed worktree");
@@ -321,7 +321,7 @@ mod tests {
         db.connection()
             .execute(
                 "INSERT INTO repositories (id, name, path, mode, primary_branch, remote_url, last_refreshed_at, created_at, updated_at)
-                 VALUES ('repo-1', 'EXOG App', '/tmp/exog-app', 'linked', 'main', 'https://example.test/exog.git', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
+                 VALUES ('repo-1', 'Acme App', '/tmp/acme-app', 'linked', 'main', 'https://example.test/acme.git', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z')",
                 [],
             )
             .expect("seed repo");
@@ -348,9 +348,9 @@ mod tests {
                 },
             )
             .expect("row");
-        assert_eq!(name, "EXOG App");
+        assert_eq!(name, "Acme App");
         assert_eq!(branch.as_deref(), Some("main"));
-        assert_eq!(remote.as_deref(), Some("https://example.test/exog.git"));
+        assert_eq!(remote.as_deref(), Some("https://example.test/acme.git"));
         assert_eq!(health, "unknown");
         assert_eq!(detail, None);
         assert_eq!(reconciled, None);

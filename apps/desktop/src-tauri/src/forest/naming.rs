@@ -49,10 +49,10 @@ mod tests {
 
     #[test]
     fn slugs_branch_names_without_changing_the_git_ref() {
-        assert_eq!(slugify("feat/risk-483"), "feat-risk-483");
+        assert_eq!(slugify("feat/auth-142"), "feat-auth-142");
         assert_eq!(
-            filename_safe("feat/Risk-483", WorktreeNamingStrategy::BranchAsIs),
-            "feat-Risk-483"
+            filename_safe("feat/Auth-142", WorktreeNamingStrategy::BranchAsIs),
+            "feat-Auth-142"
         );
         assert!(matches!(
             validate_slug("..").expect_err("dotdot"),

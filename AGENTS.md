@@ -562,15 +562,15 @@ Example:
 ```text
 ~/forest/
 ├── repos/
-│   ├── exog-app/
-│   └── exog-api/
+│   ├── acme-app/
+│   └── acme-api/
 │
 ├── worktrees/
-│   ├── exog-app/
-│   │   ├── feat-risk-483/
+│   ├── acme-app/
+│   │   ├── feat-auth-142/
 │   │   └── fix-dashboard/
 │   │
-│   └── exog-api/
+│   └── acme-api/
 │       └── feat-export/
 │
 └── state/
@@ -885,8 +885,8 @@ Action
 Examples:
 
 ```text
-EXOG / main
-EXOG / feat-risk-483
+Acme / main
+Acme / feat-auth-142
 Game / feat-map-generation
 ```
 

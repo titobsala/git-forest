@@ -56,12 +56,12 @@ describe("buildCommands", () => {
 
   it("names the target in the subtitle once something is selected", () => {
     const commands = buildCommands(
-      context({ selectedRepository: sampleRepository({ name: "EXOG App" }) }),
+      context({ selectedRepository: sampleRepository({ name: "Acme App" }) }),
     );
 
     const command = byId(commands, "worktree.new");
     expect(command?.disabledReason).toBeUndefined();
-    expect(command?.subtitle).toBe("EXOG App");
+    expect(command?.subtitle).toBe("Acme App");
   });
 
   it("opens the selected worktree in the terminal", () => {
