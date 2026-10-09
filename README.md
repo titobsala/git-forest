@@ -102,7 +102,21 @@ The reasoning behind these is recorded in [`docs/decisions/`](docs/decisions/).
 
 ## Getting started
 
-### Prerequisites
+### Download
+
+Prebuilt x86_64 Linux packages are attached to each [GitHub Release](https://github.com/titobsala/git-forest/releases/latest):
+
+| Package     | For                                  |
+| ----------- | ------------------------------------ |
+| `.AppImage` | Any distribution: `chmod +x` and run |
+| `.deb`      | Debian, Ubuntu, and derivatives      |
+| `.rpm`      | Fedora, openSUSE, and derivatives    |
+
+You also need Git, and [Warp](https://www.warp.dev/) to open worktrees and launch agents. Checksums are in `SHA256SUMS.txt`.
+
+### Build from source
+
+Prerequisites:
 
 - [Bun](https://bun.sh)
 - [Rust](https://rustup.rs) (stable, with `clippy` and `rustfmt`)
@@ -116,7 +130,7 @@ sudo apt install build-essential curl wget file pkg-config libssl-dev \
   librsvg2-dev libxdo-dev
 ```
 
-### Run from source
+Then:
 
 ```bash
 git clone https://github.com/titobsala/git-forest.git
@@ -139,7 +153,7 @@ bun run check:rust    # rustfmt, Clippy (-D warnings), cargo test
 bun run check         # everything above
 ```
 
-`bun install` enables a pre-commit hook (`.githooks/`) that formats and lints staged files. CI runs the frontend checks, the Rust checks, and a full Tauri desktop build on every pull request.
+`bun install` enables a pre-commit hook (`.githooks/`) that formats and lints staged files. CI runs the frontend checks, the Rust checks, and a full Tauri desktop build on every pull request. Pushing a version tag builds the release packages; see [releasing](docs/releasing.md).
 
 Rust tests create throwaway Git repositories to exercise real worktree scenarios: dirty and untracked checkouts, detached HEAD, removed directories, externally created worktrees, and stale metadata. Desktop-only behavior is covered by the [manual QA checklist](docs/testing.md).
 

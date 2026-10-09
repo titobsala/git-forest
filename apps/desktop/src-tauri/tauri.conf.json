@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Git Forest",
-  "version": "0.1.1",
   "identifier": "dev.gitforest.desktop",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -31,6 +30,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Tito Sala",
+    "copyright": "Copyright (c) 2026 Tito Sala",
+    "license": "MIT",
+    "homepage": "https://github.com/titobsala/git-forest",
+    "category": "DeveloperTool",
+    "shortDescription": "Keyboard-first control plane for Git worktrees and CLI coding agents",
+    "longDescription": "Git Forest indexes your Git repositories, creates and safely removes worktrees, opens them in your terminal, and launches and tracks CLI coding agents such as Codex, Claude Code, and OpenCode.",
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
@@ -39,6 +45,14 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["git"]
+      },
+      "rpm": {
+        "depends": ["git"]
+      }
+    }
   }
 }

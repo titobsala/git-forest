@@ -10,6 +10,7 @@ In this folder:
 
 - [design.md](design.md) — UI/UX design system and layout specification
 - [testing.md](testing.md) — manual QA checklist for desktop-only behavior
+- [releasing.md](releasing.md) — versioning and the release workflow
 - [screenshots/](screenshots/) — images used by the README
 
 Decision records:
